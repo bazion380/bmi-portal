@@ -1,5 +1,6 @@
+import { useAcademicStore } from '../../store/academicStore';
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+
 import { useStudents } from '../../hooks/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 
@@ -15,7 +16,7 @@ import {
 export const StudentSupport: React.FC = () => {
   const { data: students = [] } = useStudents();
   const { activeStudentId } = useAuthStore();
-  const { advisingNotes, addAdvisingNote } = useApp();
+  const { advisingNotes, addAdvisingNote } = useAcademicStore();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myNotes = advisingNotes.filter(n => n.studentId === student.id);

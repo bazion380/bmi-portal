@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useStudents } from '../../hooks/api';
+import React, { useState } from 'react';
+
+import { useStudents, useUpdateStudent } from '../../hooks/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { User, ShieldCheck, FileCheck, Phone, Mail, MapPin, QrCode, Edit2, X, CheckCircle2, Lock, Printer } from 'lucide-react';
 import { 

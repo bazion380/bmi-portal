@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useBooks, useLoans, useStudents } from '../../hooks/api';
+import React, { useState } from 'react';
+
+import { useBooks, useLoans, useStudents, useAddBook, useCheckoutBook, useReturnBook } from '../../hooks/api';
 import { Book, CheckCircle2, Clock, Search, Plus, X, ArrowUpRight, Check } from 'lucide-react';
 
 export const LibrarianView: React.FC = () => {
