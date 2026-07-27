@@ -1,0 +1,28 @@
+name = "bmi-ums-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# All secrets are set via wrangler. Run these commands once before deploying:
+#
+#   npx wrangler secret put DATABASE_URL
+#   npx wrangler secret put HR_DATABASE_URL
+#   npx wrangler secret put LIBRARY_DATABASE_URL
+#   npx wrangler secret put ALUMNI_DATABASE_URL
+#   npx wrangler secret put CAMPUS_DATABASE_URL
+#   npx wrangler secret put NEON_AUTH_JWKS_URL
+#
+# DATABASE_URL format: postgresql://user:pass@ep-xxx.neon.tech/dbname?sslmode=require
+# NEON_AUTH_JWKS_URL:  https://your-project-id.neon.tech/.well-known/jwks.json
+#   → Find this in: neon.tech → core-db project → Auth tab → enable Neon Auth
+
+[vars]
+# Non-sensitive config can go here (no secrets)
+ENVIRONMENT = "production"
+
+# For local development, add a .dev.vars file (never commit it) with:
+# DATABASE_URL=postgresql://...
+# HR_DATABASE_URL=postgresql://...
+# LIBRARY_DATABASE_URL=postgresql://...
+# ALUMNI_DATABASE_URL=postgresql://...
+# CAMPUS_DATABASE_URL=postgresql://...

@@ -1,64 +1,91 @@
-import { db, saveDB, logServerAudit } from "../data/db.js";
+import { prisma } from "../data/prisma.js";
 import { Student } from "../../src/types/index.js";
+import { logServerAudit } from "../data/db.js";
 
 export class StudentService {
-  static getAllStudents(): Student[] {
-    return db.students;
+  static async getAllStudents() {
+    return prisma.student.findMany();
   }
 
-  static getStudentById(id: string): Student | undefined {
-    return db.students.find(s => s.id === id);
+  static async getStudentById(id: string) {
+    return prisma.student.findUnique({
+      where: { id }
+    });
   }
 
-  static createStudent(data: Student, userRole: string, userName: string): Student {
-    if (!data.firstName || !data.lastName || !data.email) {
+  static async createStudent(data: any, userRole: string, userName: string) {
+    if (!data.firstName || !data.lastName || !data.email || !data.nationalId || !data.gender || !data.nationality || !data.program || !data.department || !data.dateOfBirth) {
       throw new Error("Missing required biographic fields");
     }
 
-    db.students.push(data);
-    saveDB(db);
+    const student = await prisma.student.create({
+      data: {
+        studentUid: data.studentUid,
+        registrationNumber: data.registrationNumber,
+        studentNumber: data.studentNumber,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        dateOfBirth: new Date(data.dateOfBirth),
+        nationalId: data.nationalId,
+        gender: data.gender,
+        nationality: data.nationality,
+        career: data.career || 'UG',
+        program: data.program,
+        department: data.department,
+        cohortYear: data.cohortYear,
+        currentSemester: data.currentSemester || 1,
+        academicStatus: data.academicStatus || 'Active',
+      }
+    });
 
     logServerAudit(
       "Student Created",
-      `New SIS student record created for ${data.firstName} ${data.lastName} (${data.registrationNumber})`,
+      `New SIS student record created for ${student.firstName} ${student.lastName} (${student.registrationNumber})`,
       userRole,
       userName
     );
 
-    return data;
+    return student;
   }
 
-  static updateStudent(id: string, updates: Partial<Student>, userRole: string, userName: string): Student {
-    const index = db.students.findIndex(s => s.id === id);
-    if (index === -1) {
+  static async updateStudent(id: string, updates: any, userRole: string, userName: string) {
+    const existing = await prisma.student.findUnique({ where: { id } });
+    if (!existing) {
       throw new Error("Student not found");
     }
 
-    const ALLOWED_FIELDS: (keyof Student)[] = [
+    const ALLOWED_FIELDS = [
       "firstName", "lastName", "email", "phone", "dateOfBirth", "gender", "nationality",
       "program", "department", "cohortYear", "currentSemester", "academicStatus",
       "financialHold", "academicHold", "gpa", "cgpa", "creditsEarned", "creditsRequired",
-      "advisorName", "advisorEmail", "avatarUrl", "guardianName", "guardianRelation",
-      "guardianPhone", "guardianEmail"
+      "advisorName", "advisorEmail"
     ];
 
-    const sanitizedUpdates: Partial<Student> = {};
+    const sanitizedUpdates: any = {};
     for (const field of ALLOWED_FIELDS) {
       if (updates[field] !== undefined) {
-        (sanitizedUpdates as Record<string, unknown>)[field] = updates[field];
+        if (field === 'dateOfBirth') {
+          sanitizedUpdates[field] = new Date(updates[field]);
+        } else {
+          sanitizedUpdates[field] = updates[field];
+        }
       }
     }
 
-    db.students[index] = { ...db.students[index], ...sanitizedUpdates };
-    saveDB(db);
+    const student = await prisma.student.update({
+      where: { id },
+      data: sanitizedUpdates
+    });
 
     logServerAudit(
       "Student Updated",
-      `Student record updated for ${db.students[index].firstName} ${db.students[index].lastName}`,
+      `Student record updated for ${student.firstName} ${student.lastName}`,
       userRole,
       userName
     );
 
-    return db.students[index];
+    return student;
   }
 }

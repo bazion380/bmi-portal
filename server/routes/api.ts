@@ -59,22 +59,31 @@ router.post("/api/auth/login", (req, res) => {
 import { StudentService } from "../services/studentService.js";
 
 // Students API
-router.get("/api/students", authMiddleware, (req, res) => {
-  res.json(StudentService.getAllStudents());
-});
-
-router.get("/api/students/:id", authMiddleware, (req, res) => {
-  const student = StudentService.getStudentById(req.params.id);
-  if (!student) {
-    return res.status(404).json({ error: "Student not found" });
+router.get("/api/students", authMiddleware, async (req, res) => {
+  try {
+    const students = await StudentService.getAllStudents();
+    res.json(students);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
-  res.json(student);
 });
 
-router.post("/api/students", authMiddleware, requireRoles("registrar", "admissions"), (req, res) => {
+router.get("/api/students/:id", authMiddleware, async (req, res) => {
+  try {
+    const student = await StudentService.getStudentById(req.params.id);
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+    res.json(student);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/api/students", authMiddleware, requireRoles("registrar", "admissions"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   try {
-    const student = StudentService.createStudent(
+    const student = await StudentService.createStudent(
       req.body, 
       authReq.userRole || "unknown", 
       authReq.userName || "unknown"
@@ -85,10 +94,10 @@ router.post("/api/students", authMiddleware, requireRoles("registrar", "admissio
   }
 });
 
-router.put("/api/students/:id", authMiddleware, requireRoles("registrar", "finance", "advisor", "exam_officer"), (req, res) => {
+router.put("/api/students/:id", authMiddleware, requireRoles("registrar", "finance", "advisor", "exam_officer"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   try {
-    const student = StudentService.updateStudent(
+    const student = await StudentService.updateStudent(
       req.params.id, 
       req.body, 
       authReq.userRole || "unknown", 
