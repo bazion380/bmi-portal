@@ -1,0 +1,57 @@
+name: BMI UMS Scheduled Database Backup to Cloudflare R2
+
+on:
+  schedule:
+    # Run nightly at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      database_project:
+        description: 'Neon Database Project (core-db, hr-db, library-db, alumni-db, campus-services-db)'
+        required: true
+        default: 'core-db'
+
+jobs:
+  backup-to-r2:
+    name: Execute pg_dump & Stream Snapshot to Cloudflare R2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL Client Tools & AWS CLI
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client gzip awscli
+
+      - name: Run pg_dump & Compress Snapshot
+        env:
+          DATABASE_URL: ${{ secrets.NEON_CORE_DB_URL }}
+          DB_PROJECT: ${{ github.event.inputs.database_project || 'core-db' }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%d_%H%M%S")
+          BACKUP_FILENAME="${DB_PROJECT}_pgdump_${TIMESTAMP}.sql.gz"
+          echo "Initiating pg_dump for Neon DB Project: $DB_PROJECT at $TIMESTAMP..."
+          
+          # Perform pg_dump and pipe into gzip
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip -9 > "$BACKUP_FILENAME"
+          
+          FILE_SIZE=$(du -h "$BACKUP_FILENAME" | cut -f1)
+          echo "Backup file created successfully: $BACKUP_FILENAME (Size: $FILE_SIZE)"
+          echo "BACKUP_FILENAME=$BACKUP_FILENAME" >> $GITHUB_ENV
+
+      - name: Stream Snapshot to Cloudflare R2 (Zero Egress Object Storage)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: 'bmi-ums-backups'
+        run: |
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          echo "Uploading $BACKUP_FILENAME to Cloudflare R2 bucket: $R2_BUCKET..."
+          
+          aws s3 cp "$BACKUP_FILENAME" "s3://${R2_BUCKET}/daily/${BACKUP_FILENAME}" \
+            --endpoint-url "$R2_ENDPOINT"
+            
+          echo "Backup successfully stored in Cloudflare R2 with $0 bandwidth egress fees!"
