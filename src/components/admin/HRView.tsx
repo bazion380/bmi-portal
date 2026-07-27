@@ -1,7 +1,6 @@
-import { useApp } from '../../context/AppContext';
 import React, { useState } from 'react';
-
-import { useStaff, useAddStaff, useUpdateStaff } from '../../hooks/api';
+import { useApp } from '../../context/AppContext';
+import { useStaff } from '../../hooks/api';
 import { Users, Briefcase, CheckCircle2, Plus, X, Edit2 } from 'lucide-react';
 import { StaffRecord } from '../../types';
 

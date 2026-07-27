@@ -461,14 +461,13 @@ export const AdmissionsView: React.FC = () => {
               {/* Security Background Overlay */}
               <GuillochePattern />
               <SecurityWatermark text="BMI OFFICIAL OFFER" subtext="CANONICAL ADMISSIONS RECORD" />
-
-              <MicrotextBorder text="• BMI UNIVERSITY OFFICE OF ADMISSIONS • OFFICIAL PROVISIONAL OFFER SEC-2026 • DO NOT DUPLICATE " />
+              <MicrotextBorder text="• BETHEL MINISTRIES INTERNATIONAL OFFICE OF ADMISSIONS • OFFICIAL PROVISIONAL OFFER SEC-2026 • DO NOT DUPLICATE " />
 
               {/* Header */}
               <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between relative z-10">
                 <div>
-                  <h1 className="text-xl font-black text-slate-900">BMI UNIVERSITY</h1>
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600">OFFICE OF UNDERGRADUATE ADMISSIONS</p>
+                  <h1 className="text-xl font-black text-slate-900">BETHEL MINISTRIES INTERNATIONAL</h1>
+                  <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600">OFFICE OF ADMISSIONS</p>
                 </div>
                 <div className="text-right font-mono text-[11px]">
                   <p className="font-bold text-indigo-900">OFFER ID: {offerModalApp.applicationNumber}</p>
@@ -480,7 +479,7 @@ export const AdmissionsView: React.FC = () => {
               <div className="space-y-3 relative z-10 leading-relaxed text-slate-800">
                 <p className="font-bold text-sm text-slate-900">Dear {offerModalApp.applicantName},</p>
                 <p>
-                  On behalf of the Admissions Board at <strong>BMI University</strong>, it is our great pleasure to offer you official admission to the <strong>{offerModalApp.programApplied}</strong> program.
+                  On behalf of the Admissions Board at <strong>Bethel Ministries International (BMI)</strong>, it is our great pleasure to offer you official admission to the <strong>{offerModalApp.programApplied}</strong> program.
                 </p>
                 <p>
                   Your exceptional academic record (GPA: <span className="font-mono font-bold">{offerModalApp.highSchoolGPA}</span>) and accomplishments demonstrate the high potential for excellence that we foster across our institution.
@@ -514,7 +513,7 @@ export const AdmissionsView: React.FC = () => {
               <div className="pt-4 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-600 relative z-10">
                 <div>
                   <p className="font-bold text-slate-900">Dr. Marcus Vance</p>
-                  <p>Dean of Admissions, BMI University</p>
+                  <p>Dean of Admissions, Bethel Ministries International</p>
                 </div>
                 <div className="p-2 border-2 border-indigo-900 rounded-xl text-center text-indigo-900 font-bold text-[9px] uppercase tracking-wider bg-indigo-50/80">
                   OFFICIAL ADMISSIONS SEAL<br />VERIFIED ATTESTATION

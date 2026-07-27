@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuthStore } from '../../store/useAuthStore';
-import { useUIStore } from '../../store/uiStore';
-import { useStudents, useAuditLogs } from '../../hooks/api';
+import { useStudents } from '../../hooks/api';
 import { UserRole, ThemeMode } from '../../types';
 import { BmiLogo } from './BmiLogo';
 import { 
@@ -29,9 +28,12 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, onOpenLogin }) => {
   const { currentPortal, setCurrentPortal, activeRole, setActiveRole, activeStudentId, setActiveStudentId, authToken, authUser } = useAuthStore();
   const { data: students = [] } = useStudents();
-  const { data: auditLogs = [] } = useAuditLogs();
-  const { resetDemoData } = useApp();
-  const { theme, setTheme } = useUIStore();
+  const { 
+    auditLogs,
+    resetDemoData,
+    theme,
+    setTheme
+  } = useApp();
 
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
@@ -39,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, on
 
   const themeOptions: { id: ThemeMode; label: string; bgClass: string; borderClass: string; desc: string }[] = [
     { id: 'emerald', label: 'BMI Emerald & Gold', bgClass: 'bg-emerald-600', borderClass: 'border-amber-400', desc: 'Classic University Heritage' },
-    { id: 'indigo', label: 'Indigo Bear Executive', bgClass: 'bg-indigo-600', borderClass: 'border-blue-400', desc: 'Official Administrative Theme' },
+    { id: 'indigo', label: 'Indigo BMI Executive', bgClass: 'bg-indigo-600', borderClass: 'border-blue-400', desc: 'Official Administrative Theme' },
     { id: 'cyber', label: 'Neon Cyber Strategy', bgClass: 'bg-teal-500', borderClass: 'border-cyan-400', desc: 'Modern High Contrast Tech' },
     { id: 'royal', label: 'Royal Sapphire', bgClass: 'bg-blue-700', borderClass: 'border-yellow-400', desc: 'Chancellor Navy & Gold' },
     { id: 'midnight', label: 'Midnight Obsidian', bgClass: 'bg-slate-800', borderClass: 'border-emerald-400', desc: 'Ultra Dark Mode' },

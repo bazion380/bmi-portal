@@ -1,6 +1,5 @@
-import { useAcademicStore } from '../../store/academicStore';
 import React from 'react';
-
+import { useApp } from '../../context/AppContext';
 import { useStudents, useCourses, useInvoices } from '../../hooks/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 
@@ -26,7 +25,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
   const { data: courses = [] } = useCourses();
   const { data: invoices = [] } = useInvoices();
   const { activeStudentId } = useAuthStore();
-  const { enrollments } = useAcademicStore();
+  const { enrollments } = useApp();
 
   const student = students.find(s => s.id === activeStudentId) || students[0];
 

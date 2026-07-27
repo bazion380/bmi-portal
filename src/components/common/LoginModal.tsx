@@ -21,8 +21,6 @@ interface LoginModalProps {
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { setActiveRole, setAuth, authToken, authUser } = useAuthStore();
-  const setAuthToken = (token: string | null) => setAuth(token, authUser);
-  const setAuthUser = (user: { name: string; role: UserRole } | null) => setAuth(authToken, user);
   
   const [selectedRole, setSelectedRole] = useState<UserRole>('president');
   const [passcode, setPasscode] = useState('');
@@ -63,8 +61,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       }
 
       // Store JWT token & Auth User
-      setAuthToken(data.token);
-      setAuthUser(data.user);
+      setAuth(data.token, data.user);
       setActiveRole(selectedRole);
       
       setSuccessMsg(`Authenticated as ${data.user.name}`);

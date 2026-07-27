@@ -1,8 +1,6 @@
-import { useApp } from '../../context/AppContext';
-import { useAcademicStore } from '../../store/academicStore';
 import React, { useState } from 'react';
-
-import { useStudents, useCourses, useToggleStudentHold, useAddCourse, useUpdateCourse, useDeleteCourse, useGraduateStudent } from '../../hooks/api';
+import { useApp } from '../../context/AppContext';
+import { useStudents, useCourses } from '../../hooks/api';
 import { 
   BookOpen, 
   Search, 

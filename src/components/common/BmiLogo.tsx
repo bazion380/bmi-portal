@@ -202,7 +202,7 @@ export const BmiLogo: React.FC<BmiLogoProps> = ({
       <div className={`inline-flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-purple-950/80 border border-amber-400/40 text-white shadow-lg backdrop-blur-sm ${className}`}>
         <div className="w-7 h-7 shrink-0">{LogoGraphic}</div>
         <div className="flex flex-col">
-          <span className="font-extrabold text-xs tracking-tight text-amber-300 font-serif">BMI UNIVERSITY</span>
+          <span className="font-extrabold text-xs tracking-tight text-amber-300 font-serif">BETHEL MINISTRIES INT'L</span>
           <span className="text-[8px] uppercase tracking-widest text-purple-200 font-bold">Official Shield Emblem</span>
         </div>
       </div>
@@ -220,7 +220,7 @@ export const BmiLogo: React.FC<BmiLogoProps> = ({
       <div className="flex flex-col">
         <div className="flex items-center space-x-2">
           <span className={`font-black tracking-tight text-white ${dim.text} font-serif`}>
-            BMI <span className="text-amber-400 font-sans">UNIVERSITY</span>
+            BMI <span className="text-amber-400 font-sans">MINISTRIES</span>
           </span>
           <span className="text-[9px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-700 to-indigo-700 text-amber-200 shadow-sm border border-amber-400/30">
             UMS
@@ -229,7 +229,7 @@ export const BmiLogo: React.FC<BmiLogoProps> = ({
 
         {showTagline && (
           <p className={`${dim.sub} text-purple-200/90 font-medium tracking-tight truncate max-w-[220px] sm:max-w-none`}>
-            Bear Mountain Institute of Higher Learning
+            Bethel Ministries International
           </p>
         )}
       </div>

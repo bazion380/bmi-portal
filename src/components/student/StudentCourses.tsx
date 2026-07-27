@@ -1,6 +1,5 @@
-import { useAcademicStore } from '../../store/academicStore';
 import React, { useState } from 'react';
-
+import { useApp } from '../../context/AppContext';
 import { useStudents, useCourses } from '../../hooks/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { BookOpen, User, Clock, MapPin, FileText, CheckCircle, MessageSquare, Send, CheckCircle2, Upload, X } from 'lucide-react';
@@ -9,7 +8,7 @@ export const StudentCourses: React.FC = () => {
   const { data: students = [] } = useStudents();
   const { data: courses = [] } = useCourses();
   const { activeStudentId } = useAuthStore();
-  const { enrollments } = useAcademicStore();
+  const { enrollments } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'Enrolled');
@@ -39,7 +38,6 @@ export const StudentCourses: React.FC = () => {
     if (!msgSubject || !msgBody || !activeCourse) return;
 
     const newMsg = {
-      // eslint-disable-next-line react-hooks/purity
       id: `msg-${Date.now()}`,
       courseCode: activeCourse.code,
       instructor: activeCourse.instructorName,
@@ -61,7 +59,6 @@ export const StudentCourses: React.FC = () => {
     if (!submissionText || !activeCourse) return;
 
     const newSub = {
-      // eslint-disable-next-line react-hooks/purity
       id: `SUB-${Math.floor(100 + Math.random() * 900)}`,
       courseCode: activeCourse.code,
       title: `${activeCourse.code} Assignment Submission`,

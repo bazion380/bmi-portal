@@ -42,7 +42,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
           severity: 'Warning',
         }),
       }).catch(() => {});
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   }
 
   public handleReload = () => {
