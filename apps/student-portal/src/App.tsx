@@ -1,137 +1,127 @@
-import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { Sidebar, Page } from './components/Sidebar';
-import { Topbar } from './components/Topbar';
-import { DashboardView } from './views/DashboardView';
-import { GradesView } from './views/GradesView';
-import { RegistrationView } from './views/RegistrationView';
-import { signInWithPassword } from './lib/neonAuth';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { AppProvider, useApp } from './context/AppContext';
+import { Header } from './components/common/Header';
+import { AuditLogModal } from './components/common/AuditLogModal';
+import { GlobalSearchModal } from './components/common/GlobalSearchModal';
+import { LoginModal } from './components/common/LoginModal';
+import { StudentPortal } from './components/student/StudentPortal';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { ShieldAlert, ShieldCheck } from 'lucide-react';
 
-const PAGE_TITLES: Record<Page, string> = {
-  dashboard:    'Dashboard',
-  grades:       'My Grades',
-  registration: 'Course Registration',
-  finance:      'Finance & Fees',
-  library:      'Library',
-  notifications:'Notifications',
-  profile:      'My Profile',
-};
+const StaffProtectedRoute: React.FC<{ onOpenLogin: () => void }> = ({ onOpenLogin }) => {
+  const { authToken, authUser } = useApp();
 
-const PlaceholderView: React.FC<{ page: Page }> = ({ page }) => (
-  <div>
-    <div className="page-header fade-up"><h1>{PAGE_TITLES[page]}</h1></div>
-    <div className="card fade-up fade-up-delay-1" style={{ textAlign: 'center', padding: '48px' }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🚧</div>
-      <p style={{ color: 'var(--text-muted)' }}>
-        The <strong style={{ color: 'var(--text-primary)' }}>{PAGE_TITLES[page]}</strong> module is coming soon.
-      </p>
-    </div>
-  </div>
-);
+  const isStaffAuthenticated = Boolean(authToken && authUser && authUser.role !== 'student');
 
-const LoginScreen: React.FC = () => {
-  const { login } = useAuth();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const authResponse = await signInWithPassword(email, password);
-      login(authResponse.access_token, {
-        id:        authResponse.user.id,
-        name:      authResponse.user.user_metadata?.full_name ?? authResponse.user.email,
-        role:      authResponse.user.user_metadata?.role ?? 'student',
-        studentId: authResponse.user.user_metadata?.student_id ?? '—',
-        program:   authResponse.user.user_metadata?.program ?? '—',
-      });
-    } catch (e: any) {
-      setError(e.message ?? 'Login failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-base)',
-      backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.15) 0%, transparent 60%)',
-      padding: '24px',
-    }}>
-      <div className="login-card fade-up">
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{
-            width: '52px', height: '52px',
-            background: 'linear-gradient(135deg, var(--brand), #818cf8)',
-            borderRadius: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.3rem', fontWeight: 800, color: 'white',
-            boxShadow: '0 0 28px rgba(99,102,241,0.4)', marginBottom: '14px',
-          }}>BMI</div>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>Welcome back</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Sign in to the BMI Student Portal</p>
+  if (!isStaffAuthenticated) {
+    return (
+      <div className="max-w-2xl mx-auto my-16 p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-6 shadow-2xl">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mx-auto">
+          <ShieldAlert className="w-8 h-8" />
         </div>
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="form-group">
-            <label className="form-label">University Email</label>
-            <input id="student-email" type="email" className="form-input"
-              value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="student@bmi.edu.gh" required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input id="student-password" type="password" className="form-input"
-              value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" required />
-          </div>
-          {error && (
-            <div className="alert alert-danger" style={{ margin: 0, padding: '10px 14px', fontSize: '0.8rem' }}>{error}</div>
-          )}
-          <button id="student-login-submit" type="submit" className="btn btn-primary"
-            disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: '4px' }}>
-            {loading ? 'Signing in…' : 'Sign In'}
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-white">Staff & Faculty Authorization Required</h2>
+          <p className="text-sm text-slate-400 max-w-lg mx-auto">
+            Access to the BMI UMS Staff Console is restricted to authenticated staff, faculty, and administrative officers with active Bearer credentials.
+          </p>
+        </div>
+        <div className="pt-2 flex items-center justify-center space-x-4">
+          <button
+            onClick={onOpenLogin}
+            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center space-x-2"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Authenticate Staff Credentials</span>
           </button>
-        </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <AdminDashboard />;
 };
 
-const AppShell: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [activePage, setActivePage] = useState<Page>('dashboard');
+const MainLayout: React.FC = () => {
+  const { currentPortal, setCurrentPortal } = useApp();
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  if (!isAuthenticated) return <LoginScreen />;
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const renderPage = () => {
-    switch (activePage) {
-      case 'dashboard':    return <DashboardView />;
-      case 'grades':       return <GradesView />;
-      case 'registration': return <RegistrationView />;
-      default:             return <PlaceholderView page={activePage} />;
+  // Synchronize route paths with currentPortal state for deep-linking support
+  useEffect(() => {
+    if (location.pathname.startsWith('/staff') && currentPortal !== 'staff') {
+      setCurrentPortal('staff');
+    } else if (location.pathname.startsWith('/student') && currentPortal !== 'student') {
+      setCurrentPortal('student');
     }
-  };
+  }, [location.pathname, currentPortal, setCurrentPortal]);
+
+  // Synchronize portal state changes with URL router
+  useEffect(() => {
+    if (currentPortal === 'staff' && !location.pathname.startsWith('/staff')) {
+      navigate('/staff', { replace: true });
+    } else if (currentPortal === 'student' && !location.pathname.startsWith('/student')) {
+      navigate('/student', { replace: true });
+    }
+  }, [currentPortal]);
+
+  // Keyboard shortcut for search (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div className="app-shell">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
-      <div className="main-content">
-        <Topbar title={PAGE_TITLES[activePage]} />
-        <main className="page-content">{renderPage()}</main>
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Header Bar */}
+      <Header
+        onOpenAuditLog={() => setIsAuditLogOpen(true)}
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenLogin={() => setIsLoginOpen(true)}
+      />
+
+      {/* Primary Client-Side Router View */}
+      <main>
+        <Routes>
+          <Route path="/" element={<Navigate to="/student" replace />} />
+          <Route path="/student/*" element={<StudentPortal />} />
+          <Route path="*" element={<Navigate to="/student" replace />} />
+        </Routes>
+      </main>
+
+      {/* Global Modals */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditLogOpen}
+        onClose={() => setIsAuditLogOpen(false)}
+      />
+
+      <GlobalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </div>
   );
 };
 
-const App: React.FC = () => (
-  <AuthProvider>
-    <AppShell />
-  </AuthProvider>
-);
-
-export default App;
+export default function App() {
+  return (
+    <AppProvider>
+      <MainLayout />
+    </AppProvider>
+  );
+}

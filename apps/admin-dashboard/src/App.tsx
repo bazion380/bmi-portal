@@ -1,205 +1,127 @@
-import React, { useState } from 'react';
-import './index.css';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { Sidebar, Page } from './components/Sidebar';
-import { Topbar } from './components/Topbar';
-import { OverviewView } from './views/OverviewView';
-import { HRStaffView, HRLeaveView } from './views/HRViews';
-import { LibraryView } from './views/LibraryView';
-import { AlumniView, CampusView } from './views/AlumniCampusViews';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { AppProvider, useApp } from './context/AppContext';
+import { Header } from './components/common/Header';
+import { AuditLogModal } from './components/common/AuditLogModal';
+import { GlobalSearchModal } from './components/common/GlobalSearchModal';
+import { LoginModal } from './components/common/LoginModal';
+import { StudentPortal } from './components/student/StudentPortal';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { ShieldAlert, ShieldCheck } from 'lucide-react';
 
-// ── Page titles ──────────────────────────────────────────────────────────────
-const PAGE_TITLES: Record<Page, string> = {
-  overview:      'Dashboard Overview',
-  admissions:    'Admissions Pipeline',
-  students:      'Student Records',
-  courses:       'Courses & Offerings',
-  grades:        'Grades Management',
-  finance:       'Finance & Fees',
-  'hr-staff':    'Staff Records',
-  'hr-leave':    'Leave Requests',
-  library:       'Library Management',
-  alumni:        'Alumni Management',
-  campus:        'Campus Services',
-  notifications: 'Notifications',
-};
+const StaffProtectedRoute: React.FC<{ onOpenLogin: () => void }> = ({ onOpenLogin }) => {
+  const { authToken, authUser } = useApp();
 
-const PAGE_SUBTITLES: Record<Page, string> = {
-  overview:      'A consolidated view of all active BMI modules',
-  admissions:    'Review and process incoming applications',
-  students:      'View enrolled, graduated, and withdrawn students',
-  courses:       'Manage course catalog and term offerings',
-  grades:        'Review and submit student grade records',
-  finance:       'Manage fee structures, invoices and financial holds',
-  'hr-staff':    'Staff employment records across all departments',
-  'hr-leave':    'Review and approve staff leave applications',
-  library:       'Catalog, borrowings, and fine management',
-  alumni:        'Alumni profiles, events, and donations',
-  campus:        'Hostel allocations and transport management',
-  notifications: 'System-wide notifications and announcements',
-};
+  const isStaffAuthenticated = Boolean(authToken && authUser && authUser.role !== 'student');
 
-// ── Placeholder for views not yet built ─────────────────────────────────────
-const PlaceholderView: React.FC<{ page: Page }> = ({ page }) => (
-  <div>
-    <div className="page-header fade-up">
-      <h1>{PAGE_TITLES[page]}</h1>
-      <p>{PAGE_SUBTITLES[page]}</p>
-    </div>
-    <div className="card fade-up fade-up-delay-1" style={{ textAlign: 'center', padding: '56px' }}>
-      <div style={{ fontSize: '2.8rem', marginBottom: '14px' }}>🚧</div>
-      <p style={{ color: 'var(--text-muted)' }}>
-        The <strong style={{ color: 'var(--text-primary)' }}>{PAGE_TITLES[page]}</strong> module is under active development.
-      </p>
-    </div>
-  </div>
-);
-
-// ── Login Screen ─────────────────────────────────────────────────────────────
-const DEMO_ROLES = [
-  { role: 'president',          label: 'President (All Access)' },
-  { role: 'registrar',          label: 'Registrar' },
-  { role: 'admissions_officer', label: 'Admissions Officer' },
-  { role: 'finance_officer',    label: 'Finance Officer' },
-  { role: 'hr_manager',         label: 'HR Manager' },
-  { role: 'librarian',          label: 'Librarian' },
-  { role: 'alumni_officer',     label: 'Alumni Officer' },
-  { role: 'lecturer',           label: 'Lecturer' },
-];
-
-const LoginScreen: React.FC = () => {
-  const { login } = useAuth();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole]         = useState('president');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    // Simulate Neon Auth — swap with real call when VITE_NEON_AUTH_URL is set
-    await new Promise((r) => setTimeout(r, 500));
-    if (!email || !password) {
-      setError('Please enter your email and password.');
-      setLoading(false);
-      return;
-    }
-    login('admin-mock-jwt', {
-      id: 'admin-001',
-      name: 'Dr. Kwesi Antwi',
-      email,
-      role,
-    });
-    setLoading(false);
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-base)',
-      backgroundImage: 'radial-gradient(ellipse at 30% 0%, rgba(124,58,237,0.18) 0%, transparent 55%)',
-      padding: '24px',
-    }}>
-      <div className="card fade-up" style={{ width: '100%', maxWidth: '420px' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '52px', height: '52px',
-            background: 'linear-gradient(135deg, var(--brand), var(--brand-bright))',
-            borderRadius: '14px',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.4rem', fontWeight: 800, color: 'white',
-            boxShadow: '0 0 28px rgba(124,58,237,0.45)',
-            marginBottom: '14px',
-          }}>BMI</div>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>Admin Portal</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-            Staff &amp; administrator access only
+  if (!isStaffAuthenticated) {
+    return (
+      <div className="max-w-2xl mx-auto my-16 p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-6 shadow-2xl">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-white">Staff & Faculty Authorization Required</h2>
+          <p className="text-sm text-slate-400 max-w-lg mx-auto">
+            Access to the BMI UMS Staff Console is restricted to authenticated staff, faculty, and administrative officers with active Bearer credentials.
           </p>
         </div>
-
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="form-group">
-            <label className="form-label">University Email</label>
-            <input id="admin-email" type="email" className="form-input"
-              value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@bmi.edu.gh" required />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input id="admin-password" type="password" className="form-input"
-              value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" required />
-          </div>
-
-          {/* Role selector — for dev/demo only. Remove when Neon Auth is live */}
-          <div className="form-group">
-            <label className="form-label">Role <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(dev only — set via Neon Auth in production)</span></label>
-            <select id="admin-role" className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              {DEMO_ROLES.map((r) => (
-                <option key={r.role} value={r.role}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {error && (
-            <div className="alert alert-danger" style={{ margin: 0, padding: '10px 14px', fontSize: '0.8rem' }}>
-              {error}
-            </div>
-          )}
-
-          <button id="admin-login-submit" type="submit" className="btn btn-primary"
-            disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: '4px' }}
+        <div className="pt-2 flex items-center justify-center space-x-4">
+          <button
+            onClick={onOpenLogin}
+            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center space-x-2"
           >
-            {loading ? 'Signing in…' : 'Sign In to Admin Portal'}
+            <ShieldCheck className="w-4 h-4" />
+            <span>Authenticate Staff Credentials</span>
           </button>
-        </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <AdminDashboard />;
 };
 
-// ── App Shell ────────────────────────────────────────────────────────────────
-const AppShell: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [activePage, setActivePage] = useState<Page>('overview');
+const MainLayout: React.FC = () => {
+  const { currentPortal, setCurrentPortal } = useApp();
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  if (!isAuthenticated) return <LoginScreen />;
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const renderPage = () => {
-    switch (activePage) {
-      case 'overview':   return <OverviewView />;
-      case 'hr-staff':   return <HRStaffView />;
-      case 'hr-leave':   return <HRLeaveView />;
-      case 'library':    return <LibraryView />;
-      case 'alumni':     return <AlumniView />;
-      case 'campus':     return <CampusView />;
-      default:           return <PlaceholderView page={activePage} />;
+  // Synchronize route paths with currentPortal state for deep-linking support
+  useEffect(() => {
+    if (location.pathname.startsWith('/staff') && currentPortal !== 'staff') {
+      setCurrentPortal('staff');
+    } else if (location.pathname.startsWith('/student') && currentPortal !== 'student') {
+      setCurrentPortal('student');
     }
-  };
+  }, [location.pathname, currentPortal, setCurrentPortal]);
+
+  // Synchronize portal state changes with URL router
+  useEffect(() => {
+    if (currentPortal === 'staff' && !location.pathname.startsWith('/staff')) {
+      navigate('/staff', { replace: true });
+    } else if (currentPortal === 'student' && !location.pathname.startsWith('/student')) {
+      navigate('/student', { replace: true });
+    }
+  }, [currentPortal]);
+
+  // Keyboard shortcut for search (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div className="app-shell">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
-      <div className="main-content">
-        <Topbar title={PAGE_TITLES[activePage]} subtitle={PAGE_SUBTITLES[activePage]} />
-        <main className="page-content">{renderPage()}</main>
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Header Bar */}
+      <Header
+        onOpenAuditLog={() => setIsAuditLogOpen(true)}
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenLogin={() => setIsLoginOpen(true)}
+      />
+
+      {/* Primary Client-Side Router View */}
+      <main>
+        <Routes>
+          <Route path="/" element={<Navigate to="/staff" replace />} />
+          <Route path="/staff/*" element={<StaffProtectedRoute onOpenLogin={() => setIsLoginOpen(true)} />} />
+          <Route path="*" element={<Navigate to="/staff" replace />} />
+        </Routes>
+      </main>
+
+      {/* Global Modals */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditLogOpen}
+        onClose={() => setIsAuditLogOpen(false)}
+      />
+
+      <GlobalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </div>
   );
 };
 
-const App: React.FC = () => (
-  <AuthProvider>
-    <AppShell />
-  </AuthProvider>
-);
-
-export default App;
+export default function App() {
+  return (
+    <AppProvider>
+      <MainLayout />
+    </AppProvider>
+  );
+}
