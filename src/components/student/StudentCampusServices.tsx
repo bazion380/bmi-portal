@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents, useBooks, useLoans } from '../../hooks/api';
+import { useAuthStore } from '../../store/useAuthStore';
 import { 
   Building2, 
   Book, 
@@ -12,7 +14,11 @@ import {
 } from 'lucide-react';
 
 export const StudentCampusServices: React.FC = () => {
-  const { students, activeStudentId, libraryBooks, libraryLoans, checkoutLibraryBook, createInvoice } = useApp();
+  const { data: students = [] } = useStudents();
+  const { data: libraryBooks = [] } = useBooks();
+  const { data: libraryLoans = [] } = useLoans();
+  const { activeStudentId } = useAuthStore();
+  const { checkoutLibraryBook, createInvoice } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const [activeTab, setActiveTab] = useState<'hostel' | 'library' | 'transport' | 'health'>('hostel');

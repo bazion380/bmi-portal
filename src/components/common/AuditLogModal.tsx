@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from '../../context/AppContext';
+import { useAuditLogs } from '../../hooks/api';
 import { X, ShieldAlert, FileText, CheckCircle2, Clock } from 'lucide-react';
 
 interface AuditLogModalProps {
@@ -8,7 +8,7 @@ interface AuditLogModalProps {
 }
 
 export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose }) => {
-  const { auditLogs } = useApp();
+  const { data: auditLogs = [] } = useAuditLogs();
 
   if (!isOpen) return null;
 

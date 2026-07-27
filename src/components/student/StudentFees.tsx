@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents, useInvoices } from '../../hooks/api';
+import { useAuthStore } from '../../store/useAuthStore';
 import { 
   CreditCard, 
   CheckCircle2, 
@@ -22,7 +24,10 @@ import {
 } from '../common/DocumentSecurityComponents';
 
 export const StudentFees: React.FC = () => {
-  const { students, activeStudentId, invoices, processInvoicePayment } = useApp();
+  const { data: students = [] } = useStudents();
+  const { data: invoices = [] } = useInvoices();
+  const { activeStudentId } = useAuthStore();
+  const { processInvoicePayment } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myInvoices = invoices.filter(i => i.studentId === student.id);

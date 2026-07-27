@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useAuthStore } from '../../store/useAuthStore';
 import { UserRole } from '../../types';
 import { BmiLogo } from './BmiLogo';
 import { 
@@ -20,7 +20,9 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { setActiveRole, setAuthToken, authToken, authUser, setAuthUser } = useApp();
+  const { setActiveRole, setAuth, authToken, authUser } = useAuthStore();
+  const setAuthToken = (token: string | null) => setAuth(token, authUser);
+  const setAuthUser = (user: { name: string; role: UserRole } | null) => setAuth(authToken, user);
   
   const [selectedRole, setSelectedRole] = useState<UserRole>('president');
   const [passcode, setPasscode] = useState('');

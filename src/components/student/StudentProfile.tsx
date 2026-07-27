@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents } from '../../hooks/api';
+import { useAuthStore } from '../../store/useAuthStore';
 import { User, ShieldCheck, FileCheck, Phone, Mail, MapPin, QrCode, Edit2, X, CheckCircle2, Lock, Printer } from 'lucide-react';
 import { 
   SecurityWatermark, 
@@ -9,7 +11,9 @@ import {
 } from '../common/DocumentSecurityComponents';
 
 export const StudentProfile: React.FC = () => {
-  const { students, activeStudentId, updateStudentProfile } = useApp();
+  const { data: students = [] } = useStudents();
+  const { activeStudentId } = useAuthStore();
+  const { updateStudentProfile } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const [showDigitalIdModal, setShowDigitalIdModal] = useState(false);

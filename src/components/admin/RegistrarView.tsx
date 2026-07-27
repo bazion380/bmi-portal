@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents, useCourses } from '../../hooks/api';
 import { 
   BookOpen, 
   Search, 
@@ -25,7 +26,9 @@ import {
 } from '../common/DocumentSecurityComponents';
 
 export const RegistrarView: React.FC = () => {
-  const { students, courses, enrollments, addCourse, updateCourse, deleteCourse, graduateStudent, toggleStudentHold } = useApp();
+  const { data: students = [] } = useStudents();
+  const { data: courses = [] } = useCourses();
+  const { enrollments, addCourse, updateCourse, deleteCourse, graduateStudent, toggleStudentHold } = useApp();
   
   const [activeTab, setActiveTab] = useState<'students' | 'courses'>('students');
   const [searchQuery, setSearchQuery] = useState('');

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useApplications } from '../../hooks/api';
 import { 
   FileCheck, 
   UserPlus, 
@@ -22,8 +23,8 @@ import {
 } from '../common/DocumentSecurityComponents';
 
 export const AdmissionsView: React.FC = () => {
+  const { data: applications = [] } = useApplications();
   const { 
-    applications, 
     convertApplicationToStudent, 
     runAutomatedApplicationPipeline,
     addApplication, 

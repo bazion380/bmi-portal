@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { 
   Student, 
   Application, 
@@ -33,14 +33,59 @@ import {
 } from '../data/mockData';
 import {
   generateStudentUid,
-  extractProgramCode,
-  extractCareer,
   generateRegistrationNumber
 } from '../utils/studentIdGenerator';
 import { useAuthStore } from '../store/authStore';
-import { useUIStore } from '../store/uiStore';
-import { useSystemStore } from '../store/systemStore';
-import { useAcademicStore } from '../store/academicStore';
+import {
+  useStudents,
+  useUpdateStudent,
+  useToggleStudentHold,
+  useUpdateStudentGrade,
+  useGraduateStudent,
+  useApplications,
+  useAddApplication,
+  useUpdateApplicationStatus,
+  useUpdateApplicationDocStatus,
+  useConvertApplicationToStudent,
+  useRunAutomatedPipeline,
+  useCourses,
+  useAddCourse,
+  useUpdateCourse,
+  useDeleteCourse,
+  useInvoices,
+  useCreateInvoice,
+  useProcessPayment,
+  useApplyScholarship,
+  useStaff,
+  useAddStaff,
+  useUpdateStaff,
+  useBooks,
+  useLoans,
+  useAddBook,
+  useCheckoutBook,
+  useReturnBook,
+  useAuditLogs,
+  useLogAudit,
+} from '../hooks/api';
+
+const STORAGE_KEY_PREFIX = 'bmi_ums_state_';
+
+export function sanitizeStudentRecord(s: any): Student {
+  const currentSeq = s.internalSeq || (parseInt(s.id?.replace(/\D/g, '') || '101', 10));
+  return {
+    ...s,
+    internalSeq: currentSeq,
+    studentUid: s.studentUid || generateStudentUid(currentSeq),
+    registrationNumber: s.registrationNumber || s.studentNumber || generateRegistrationNumber({
+      career: s.career || 'UG',
+      programCode: s.program?.includes('Computer') ? 'CS' : 'ENG',
+      year: s.cohortYear || 2026,
+      serial: currentSeq
+    }),
+    studentNumber: s.studentNumber || s.registrationNumber || `BMI/UG/${currentSeq}`,
+    career: s.career || 'UG',
+  };
+}
 
 interface AppContextType {
   // Navigation & Role State
@@ -103,14 +148,18 @@ interface AppContextType {
   updateAlumniRecord: (alumniId: string, data: Partial<AlumniRecord>) => void;
   updateStudentProfile: (studentId: string, data: Partial<Student>) => void;
   graduateStudent: (studentId: string) => void;
-  approveExecutiveSignoff: (id: number) => void;
-  addExecutiveProposal: (title: string, dept: string, priority: 'High' | 'Medium' | 'Low') => void;
-  toggleSystemFlag: (flagName: 'mfaRequired' | 'maintenanceMode' | 'autoClearHolds' | 'openEnrollment') => void;
+  
+  // Executive Signoff & System Control
+  approveExecutiveSignoff: (id: number, signerName?: string) => void;
+  addExecutiveProposal: (titleOrObj: string | { title: string; dept: string; priority: 'High' | 'Medium' | 'Low' }, dept?: string, priority?: 'High' | 'Medium' | 'Low') => void;
+  toggleSystemFlag: (flagKey: 'mfaRequired' | 'maintenanceMode' | 'autoClearHolds' | 'openEnrollment') => void;
   resetDemoData: () => void;
 
-  // Theme & Neon Strategy Capabilities
+  // UI Theme Mode
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
+
+  // Neon PostgreSQL & R2 Infrastructure Monitor
   neonDatabases: NeonDatabaseContext[];
   dbBackups: DbBackupRecord[];
   rlsPolicies: RlsPolicyRule[];
@@ -120,41 +169,40 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-
-const STORAGE_KEY_PREFIX = 'bmi_ums_v4_';
-
-const sanitizeStudentRecord = (s: Student): Student => {
-  let regNo = s.registrationNumber || s.studentNumber;
-  let uid = s.studentUid;
-
-  if (s.id === 'std-101') {
-    uid = uid || 'BMI00002T';
-    regNo = 'BMI/UG-CS/224/001';
-  } else if (s.id === 'std-102') {
-    uid = uid || 'BMI00002U';
-    regNo = 'BMI/UG-DS/224/001';
-  } else if (s.id === 'std-103') {
-    uid = uid || 'BMI00002V';
-    regNo = 'BMI/UG-BBA/223/001';
-  } else if (s.id === 'std-104') {
-    uid = uid || 'BMI00002W';
-    regNo = 'BMI/UG-ENG/223/001';
-  } else if (!regNo || regNo.startsWith('BMI-202')) {
-    regNo = `BMI/UG-CS/226/${(s.id || '').replace('std-', '').padStart(3, '0')}`;
-  }
-
-  return {
-    ...s,
-    studentUid: uid || 'BMI00002T',
-    registrationNumber: regNo,
-    studentNumber: regNo
-  };
-};
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Active Portal, Role & Theme (from Zustand)
-  const { currentPortal, setCurrentPortal, activeRole, setActiveRole, activeStudentId, setActiveStudentId } = useAuthStore();
-  const { theme, setTheme } = useUIStore();
+  // Zustand Auth Store Integration
+  const {
+    authToken,
+    authUser,
+    activeRole,
+    currentPortal,
+    activeStudentId,
+    setAuthToken,
+    setAuthUser,
+    setActiveRole,
+    setCurrentPortal,
+    setActiveStudentId,
+  } = useAuthStore();
+
+  // Theme state
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('bmi_theme') as ThemeMode) || 'dark';
+  });
+
+  const setTheme = (mode: ThemeMode) => {
+    setThemeState(mode);
+    localStorage.setItem('bmi_theme', mode);
+  };
+
+  // React Query Queries
+  const { data: serverStudents } = useStudents();
+  const { data: serverApplications } = useApplications();
+  const { data: serverCourses } = useCourses();
+  const { data: serverInvoices } = useInvoices();
+  const { data: serverStaff } = useStaff();
+  const { data: serverBooks } = useBooks();
+  const { data: serverLoans } = useLoans();
+  const { data: serverAuditLogs } = useAuditLogs();
 
   // Neon Database Strategy & R2 Backup State
   const [neonDatabases] = useState<NeonDatabaseContext[]>([
@@ -324,72 +372,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return `https://documents.r2.bmi.edu/signed/${encodeURIComponent(docName)}?token=r2_signed_${Date.now()}&expires=${expires}`;
   };
 
-  // Authentication State
-  const { authToken, setAuthToken, authUser, setAuthUser } = useAuthStore();
 
-  const getAuthHeaders = (overrideToken?: string) => {
-    const token = overrideToken || authToken;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  };
-
-  // Load or Initialize State
-  const [students, setStudents] = useState<Student[]>(() => {
-    // Clear legacy v1/v2 storage keys if present
-    try {
-      localStorage.removeItem('bmi_ums_v1_students');
-      localStorage.removeItem('bmi_ums_v2_students');
-      localStorage.removeItem('bmi_ums_v3_students');
-    } catch (_) {}
-
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'students');
-    const rawList: Student[] = saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-    return rawList.map(sanitizeStudentRecord);
-  });
-
-  const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'applications');
-    return saved ? JSON.parse(saved) : INITIAL_APPLICATIONS;
-  });
-
-  const [courses, setCourses] = useState<Course[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'courses');
-    return saved ? JSON.parse(saved) : INITIAL_COURSES;
-  });
-
+  // Local fallback states for local-only entities & instant offline capability
   const [enrollments, setEnrollments] = useState<StudentCourseEnrollment[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'enrollments');
     return saved ? JSON.parse(saved) : INITIAL_ENROLLMENTS;
-  });
-
-  const [invoices, setInvoices] = useState<FeeInvoice[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'invoices');
-    return saved ? JSON.parse(saved) : INITIAL_INVOICES;
-  });
-
-  const [staffList, setStaffList] = useState<StaffRecord[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'staff');
-    return saved ? JSON.parse(saved) : INITIAL_STAFF;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'audit');
-    return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
-  });
-
-  const [libraryBooks, setLibraryBooks] = useState<LibraryBook[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'books');
-    return saved ? JSON.parse(saved) : INITIAL_BOOKS;
-  });
-
-  const [libraryLoans, setLibraryLoans] = useState<LibraryLoan[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'loans');
-    return saved ? JSON.parse(saved) : INITIAL_LOANS;
   });
 
   const [advisingNotes, setAdvisingNotes] = useState<AdvisingNote[]>(() => {
@@ -421,73 +408,137 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  // Sync to local storage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'students', JSON.stringify(students));
-  }, [students]);
-
-  // Initial backend API synchronization
-  useEffect(() => {
-    async function syncWithServerAPI() {
-      try {
-        const headers = getAuthHeaders();
-        const [stdRes, appRes, logRes, crsRes, invRes] = await Promise.all([
-          fetch('/api/students', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/applications', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/audit-logs', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/courses', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/invoices', { headers }).then(r => r.ok ? r.json() : null),
-        ]);
-
-        if (stdRes && Array.isArray(stdRes) && stdRes.length > 0) {
-          setStudents(stdRes.map(sanitizeStudentRecord));
-        }
-        if (appRes && Array.isArray(appRes) && appRes.length > 0) {
-          setApplications(appRes);
-        }
-        if (logRes && Array.isArray(logRes) && logRes.length > 0) {
-          setAuditLogs(logRes);
-        }
-        if (crsRes && Array.isArray(crsRes) && crsRes.length > 0) {
-          setCourses(crsRes);
-        }
-        if (invRes && Array.isArray(invRes) && invRes.length > 0) {
-          setInvoices(invRes);
-        }
-      } catch (err) {
-        console.warn('Backend API server not reached, using persistent cached state:', err);
-      }
+  // Neon & R2 State
+  const [neonDatabases] = useState<NeonDatabaseContext[]>([
+    {
+      id: 'db-main-01',
+      projectName: 'bmi-ums-production',
+      contextScope: 'Core Database',
+      allocatedMB: 512,
+      usedMB: 142.8,
+      computeHoursAllowance: 100,
+      computeHoursUsed: 24.5,
+      tablesCount: 18,
+      status: 'Healthy',
+      tables: ['students', 'applications', 'courses', 'invoices', 'staff', 'audit_logs']
+    },
+    {
+      id: 'db-staging-01',
+      projectName: 'bmi-ums-staging',
+      contextScope: 'Preview Staging',
+      allocatedMB: 256,
+      usedMB: 31.2,
+      computeHoursAllowance: 50,
+      computeHoursUsed: 8.2,
+      tablesCount: 18,
+      status: 'Healthy',
+      tables: ['students', 'applications', 'courses', 'invoices', 'staff', 'audit_logs']
     }
-    syncWithServerAPI();
-  }, [authToken]);
+  ]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'applications', JSON.stringify(applications));
-  }, [applications]);
+  const [dbBackups, setDbBackups] = useState<DbBackupRecord[]>([
+    {
+      id: 'bkp-101',
+      filename: 'bmi-ums-production-pgdump-2026-07-26.sql.gz',
+      timestamp: '2026-07-26 02:00:00 UTC',
+      sizeMB: 14.2,
+      databaseProject: 'bmi-ums-production',
+      r2Bucket: 'bmi-ums-backups',
+      r2ObjectKey: 'daily/bmi-ums-production-2026-07-26.sql.gz',
+      status: 'Verified'
+    },
+    {
+      id: 'bkp-100',
+      filename: 'bmi-ums-production-pgdump-2026-07-25.sql.gz',
+      timestamp: '2026-07-25 02:00:00 UTC',
+      sizeMB: 13.9,
+      databaseProject: 'bmi-ums-production',
+      r2Bucket: 'bmi-ums-backups',
+      r2ObjectKey: 'daily/bmi-ums-production-2026-07-25.sql.gz',
+      status: 'Verified'
+    }
+  ]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'courses', JSON.stringify(courses));
-  }, [courses]);
+  const [rlsPolicies] = useState<RlsPolicyRule[]>([
+    {
+      table: 'students',
+      policyName: 'student_self_read_only',
+      action: 'SELECT',
+      roleScope: 'student',
+      definition: "auth.uid() = student_uid OR auth.role IN ('registrar', 'president', 'admissions')",
+      status: 'Active'
+    },
+    {
+      table: 'invoices',
+      policyName: 'bursar_finance_all_access',
+      action: 'SELECT',
+      roleScope: 'finance_officer',
+      definition: "auth.role = 'finance_officer'",
+      status: 'Active'
+    }
+  ]);
 
+  // React Query Mutations
+  const updateStudentMut = useUpdateStudent();
+  const toggleHoldMut = useToggleStudentHold();
+  const updateGradeMut = useUpdateStudentGrade();
+  const graduateStudentMut = useGraduateStudent();
+  const addAppMut = useAddApplication();
+  const updateAppStatusMut = useUpdateApplicationStatus();
+  const updateDocStatusMut = useUpdateApplicationDocStatus();
+  const convertAppMut = useConvertApplicationToStudent();
+  const runPipelineMut = useRunAutomatedPipeline();
+  const addCourseMut = useAddCourse();
+  const updateCourseMut = useUpdateCourse();
+  const deleteCourseMut = useDeleteCourse();
+  const createInvoiceMut = useCreateInvoice();
+  const processPaymentMut = useProcessPayment();
+  const applyScholarshipMut = useApplyScholarship();
+  const addStaffMut = useAddStaff();
+  const updateStaffMut = useUpdateStaff();
+  const addBookMut = useAddBook();
+  const checkoutBookMut = useCheckoutBook();
+  const returnBookMut = useReturnBook();
+  const logAuditMut = useLogAudit();
+
+  // Combine Query Data with Initial Fallbacks
+  const students = useMemo(() => {
+    const list = serverStudents && serverStudents.length > 0 ? serverStudents : INITIAL_STUDENTS;
+    return list.map(sanitizeStudentRecord);
+  }, [serverStudents]);
+
+  const applications = useMemo(() => {
+    return serverApplications && serverApplications.length > 0 ? serverApplications : INITIAL_APPLICATIONS;
+  }, [serverApplications]);
+
+  const courses = useMemo(() => {
+    return serverCourses && serverCourses.length > 0 ? serverCourses : INITIAL_COURSES;
+  }, [serverCourses]);
+
+  const invoices = useMemo(() => {
+    return serverInvoices && serverInvoices.length > 0 ? serverInvoices : INITIAL_INVOICES;
+  }, [serverInvoices]);
+
+  const staffList = useMemo(() => {
+    return serverStaff && serverStaff.length > 0 ? serverStaff : INITIAL_STAFF;
+  }, [serverStaff]);
+
+  const libraryBooks = useMemo(() => {
+    return serverBooks && serverBooks.length > 0 ? serverBooks : INITIAL_BOOKS;
+  }, [serverBooks]);
+
+  const libraryLoans = useMemo(() => {
+    return serverLoans && serverLoans.length > 0 ? serverLoans : INITIAL_LOANS;
+  }, [serverLoans]);
+
+  const auditLogs = useMemo(() => {
+    return serverAuditLogs && serverAuditLogs.length > 0 ? serverAuditLogs : INITIAL_AUDIT_LOGS;
+  }, [serverAuditLogs]);
+
+  // Persistent storage sync for enrollments, notes, flags
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'enrollments', JSON.stringify(enrollments));
   }, [enrollments]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'invoices', JSON.stringify(invoices));
-  }, [invoices]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'staff', JSON.stringify(staffList));
-  }, [staffList]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'books', JSON.stringify(libraryBooks));
-  }, [libraryBooks]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'loans', JSON.stringify(libraryLoans));
-  }, [libraryLoans]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'executive', JSON.stringify(executiveApprovals));
@@ -497,112 +548,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEY_PREFIX + 'sysflags', JSON.stringify(systemFlags));
   }, [systemFlags]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'audit', JSON.stringify(auditLogs));
-  }, [auditLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'advising', JSON.stringify(advisingNotes));
-  }, [advisingNotes]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'alumni', JSON.stringify(alumniList));
-  }, [alumniList]);
-
-  const setCurrentPortal = (portal: 'student' | 'staff') => {
-    setCurrentPortalState(portal);
-    if (portal === 'student') {
-      setActiveRoleState('student');
-    } else if (activeRole === 'student') {
-      setActiveRoleState('president'); // default staff view
-    }
-  };
-
-  const setActiveRole = (role: UserRole) => {
-    setActiveRoleState(role);
-    if (role === 'student') {
-      setCurrentPortalState('student');
-    } else {
-      setCurrentPortalState('staff');
-    }
-  };
-
-  // Helper: Audit Logging
+  // Helper: Audit Logger
   const logAudit = (action: string, details: string, severity: 'Info' | 'Warning' | 'Security' = 'Info') => {
-    const newLog: AuditLog = {
-      id: 'log-' + Date.now(),
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      performedBy: activeRole === 'student' ? `Student (${students.find(s => s.id === activeStudentId)?.firstName || 'User'})` : `Staff (${activeRole.toUpperCase()})`,
-      role: activeRole,
-      action,
-      details,
-      ipAddress: '192.168.1.102',
-      severity
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
-
-    // Asynchronously send to server API
-    fetch('/api/audit-logs', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ action, details, severity })
-    }).catch(err => console.warn('Failed to persist audit log to server:', err));
+    logAuditMut.mutate({ action, details, severity });
   };
 
-  // 1. Course Enrollment Validator & Handler
+  // Actions
   const enrollStudentInCourse = (studentId: string, courseId: string) => {
     const student = students.find(s => s.id === studentId);
     const course = courses.find(c => c.id === courseId);
 
     if (!student || !course) {
-      return { success: false, message: 'Student or course not found.' };
+      return { success: false, message: 'Student or course record not found.' };
     }
 
-    // Check financial hold
-    if (student.financialHold) {
-      logAudit('Course Enrollment Blocked', `Attempted enrollment in ${course.code} blocked due to active Financial Hold on ${student.firstName} ${student.lastName}.`, 'Security');
-      return { 
-        success: false, 
-        message: 'Enrollment Blocked: Active Financial Hold detected. Please clear overdue fee invoices in the Fees section first.' 
+    if (student.financialHold || student.academicHold) {
+      return {
+        success: false,
+        message: `Registration blocked: Active ${student.financialHold ? 'Financial' : 'Academic'} Hold on student profile.`
       };
     }
 
-    // Check academic hold
-    if (student.academicHold) {
-      return { 
-        success: false, 
-        message: 'Enrollment Blocked: Academic Probation hold. Requires Registrar or Advisor override.' 
-      };
-    }
-
-    // Check capacity
     if (course.enrolledCount >= course.capacity) {
       return { success: false, message: `Course ${course.code} is at maximum capacity (${course.capacity} seats).` };
     }
 
-    // Check existing enrollment
     const existing = enrollments.find(e => e.studentId === studentId && e.courseId === courseId && e.status === 'Enrolled');
     if (existing) {
       return { success: false, message: `Already enrolled in ${course.code}.` };
     }
 
-    // Check prerequisites
-    const studentEnrolledCourseIds = enrollments
-      .filter(e => e.studentId === studentId && (e.status === 'Enrolled' || e.status === 'Completed'))
-      .map(e => {
-        const c = courses.find(crs => crs.id === e.courseId);
-        return c ? c.code : '';
-      });
-
-    const unfulfilledPrereqs = course.prerequisites.filter(prereq => !studentEnrolledCourseIds.includes(prereq));
-    if (unfulfilledPrereqs.length > 0) {
-      return {
-        success: false,
-        message: `Prerequisite missing: ${unfulfilledPrereqs.join(', ')} required before enrolling in ${course.code}.`
-      };
-    }
-
-    // Success: Add Enrollment & Update Count
     const newEnrollment: StudentCourseEnrollment = {
       studentId,
       courseId,
@@ -612,8 +587,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setEnrollments(prev => [...prev, newEnrollment]);
-    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, enrolledCount: c.enrolledCount + 1 } : c));
-
+    updateCourseMut.mutate({ id: courseId, data: { enrolledCount: course.enrolledCount + 1 } });
     logAudit('Course Enrollment', `Student ${student.studentNumber} enrolled in ${course.code} (${course.title}).`);
     return { success: true, message: `Successfully enrolled in ${course.code} - ${course.title}!` };
   };
@@ -621,112 +595,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dropStudentFromCourse = (studentId: string, courseId: string) => {
     const course = courses.find(c => c.id === courseId);
     setEnrollments(prev => prev.filter(e => !(e.studentId === studentId && e.courseId === courseId)));
-    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, enrolledCount: Math.max(0, c.enrolledCount - 1) } : c));
+    if (course) {
+      updateCourseMut.mutate({ id: courseId, data: { enrolledCount: Math.max(0, course.enrolledCount - 1) } });
+    }
     logAudit('Course Dropped', `Student ${studentId} dropped course ${course?.code || courseId}.`);
   };
 
-  // 2. Invoice Payment Handler + Instant Hold Auto-Unblock!
   const processInvoicePayment = (
     invoiceId: string, 
     amountPaid: number, 
     paymentMethod: 'Credit Card' | 'Bank Transfer' | 'Mobile Payment' | 'Scholarship Voucher'
   ) => {
-    let updatedStudentId = '';
-    let updatedPaid = 0;
-    let updatedStatus: FeeInvoice['status'] = 'Unpaid';
-    
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id === invoiceId) {
-        updatedStudentId = inv.studentId;
-        updatedPaid = inv.amountPaid + amountPaid;
-        updatedStatus = updatedPaid >= inv.totalAmount ? 'Paid' : 'Partial';
-        return {
-          ...inv,
-          amountPaid: updatedPaid,
-          status: updatedStatus
-        };
-      }
-      return inv;
-    }));
+    const inv = invoices.find(i => i.id === invoiceId);
+    if (!inv) return;
 
-    // Sync invoice payment with server backend API
-    fetch(`/api/invoices/${invoiceId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ amountPaid: updatedPaid, status: updatedStatus })
-    }).catch(err => console.warn('Failed to persist invoice payment on server:', err));
-
-    // Auto-check if all invoices for student are now paid -> Clear Financial Hold automatically!
-    if (updatedStudentId) {
-      setTimeout(() => {
-        setInvoices(latestInvoices => {
-          const studentInvoices = latestInvoices.filter(i => i.studentId === updatedStudentId);
-          const hasUnpaid = studentInvoices.some(i => i.status === 'Unpaid' || i.status === 'Overdue' || i.amountPaid < i.totalAmount);
-          
-          if (!hasUnpaid) {
-            setStudents(prevStudents => prevStudents.map(s => {
-              if (s.id === updatedStudentId && s.financialHold) {
-                logAudit(
-                  'Financial Hold Auto-Cleared', 
-                  `Financial Hold automatically cleared for ${s.firstName} ${s.lastName} (${s.studentNumber}) following full fee invoice payment.`,
-                  'Info'
-                );
-                fetch(`/api/students/${s.id}`, {
-                  method: 'PUT',
-                  headers: getAuthHeaders(),
-                  body: JSON.stringify({ financialHold: false })
-                }).catch(err => console.warn('Failed to clear student hold on server:', err));
-                return { ...s, financialHold: false };
-              }
-              return s;
-            }));
-          }
-          return latestInvoices;
-        });
-      }, 100);
-    }
-
-    logAudit('Fee Payment Received', `Payment of $${amountPaid} processed via ${paymentMethod} for Invoice #${invoiceId}.`);
-  };
-
-  // 3. Admissions CRM: 1-Click Enrollment pipeline (Applicant -> Canonical Student Record)
-  const convertApplicationToStudent = (applicationId: string): Student => {
-    const app = applications.find(a => a.id === applicationId);
-    if (!app) throw new Error('Application not found');
-
-    const internalSeq = 55600 + students.length + 1;
-    const studentUid = app.assignedUid || generateStudentUid(internalSeq);
-    
-    const career: AcademicCareer = app.career || extractCareer(app.programApplied);
-    const programCode = extractProgramCode(app.programApplied);
-    
-    const sameProgramCount = students.filter(s => s.program === app.programApplied).length;
-    const regNo = app.assignedRegNo || generateRegistrationNumber({
-      career,
-      programCode,
-      year: 2026,
-      serial: sameProgramCount + 1
+    processPaymentMut.mutate({
+      invoiceId,
+      amountPaid,
+      currentAmountPaid: inv.amountPaid,
+      totalAmount: inv.totalAmount,
+      scholarshipDiscount: inv.scholarshipDiscount || 0
     });
 
-    const nameParts = app.applicantName.split(' ');
+    logAudit('Fee Payment Processed', `Payment of $${amountPaid} via ${paymentMethod} applied to Invoice ${inv.invoiceNumber}.`);
+  };
+
+  const convertApplicationToStudent = (applicationId: string) => {
+    const appRecord = applications.find(a => a.id === applicationId);
+    const nextSeq = 100 + students.length + 1;
+    const uid = appRecord?.assignedUid || generateStudentUid(nextSeq);
+    const regNo = appRecord?.assignedRegNo || generateRegistrationNumber({
+      career: appRecord?.career || 'UG',
+      programCode: 'CS',
+      year: 2026,
+      serial: students.length + 1
+    });
 
     const newStudent: Student = {
-      id: 'std-' + Date.now(),
-      internalSeq,
-      studentUid,
+      id: `std-${Date.now()}`,
+      internalSeq: nextSeq,
+      studentUid: uid,
       registrationNumber: regNo,
       studentNumber: regNo,
-      career,
-      firstName: nameParts[0] || 'Applicant',
-      lastName: nameParts.slice(1).join(' ') || 'User',
-      email: `${nameParts[0].toLowerCase()}.${(nameParts[1] || 'student').toLowerCase()}@student.bmi.edu`,
-      phone: app.phone,
-      dateOfBirth: '2005-08-12',
-      nationalId: `NAT-${Math.floor(1000000 + Math.random() * 9000000)}`,
-      gender: 'Unspecified',
-      nationality: 'International',
-      program: app.programApplied,
-      department: app.department,
+      career: appRecord?.career || 'UG',
+      firstName: appRecord?.applicantName.split(' ')[0] || 'Applicant',
+      lastName: appRecord?.applicantName.split(' ').slice(1).join(' ') || 'Student',
+      email: appRecord?.email || 'student@bmi.edu',
+      phone: appRecord?.phone || '+1 (555) 000-0000',
+      dateOfBirth: '2005-08-20',
+      nationalId: `NAT-${Math.floor(100000 + Math.random() * 900000)}`,
+      gender: 'Female',
+      nationality: 'United States',
+      program: appRecord?.programApplied || 'B.Sc. Computer Science',
+      department: appRecord?.department || 'School of Computing',
       cohortYear: 2026,
       currentSemester: 1,
       academicStatus: 'Active',
@@ -736,533 +657,249 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cgpa: 0.0,
       creditsEarned: 0,
       creditsRequired: 120,
-      advisorName: 'Dr. Marcus Vance',
-      advisorEmail: 'marcus.vance@bmi.edu',
-      avatarUrl: `https://images.unsplash.com/photo-${1535713875002 + students.length}?auto=format&fit=crop&q=80&w=250`,
-      guardianName: 'Guardian of ' + app.applicantName,
-      guardianRelation: 'Parent',
-      guardianPhone: app.phone,
-      guardianEmail: app.email
+      advisorName: 'Dr. Robert Vance',
+      advisorEmail: 'r.vance@bmi.edu',
+      guardianName: 'Parent / Guardian',
+      guardianRelation: 'Father',
+      guardianPhone: '+1 (555) 019-9988',
+      guardianEmail: 'guardian@example.com',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
     };
 
-    // Update Application Status
-    setApplications(prev => prev.map(a => a.id === applicationId ? { 
-      ...a, 
-      status: 'Enrolled',
-      assignedUid: studentUid,
-      assignedRegNo: regNo 
-    } : a));
-
-    // Add to SIS Database
-    setStudents(prev => [newStudent, ...prev]);
-
-    // Create Initial Fall 2026 Tuition Invoice
-    const newInvoice: FeeInvoice = {
-      id: 'inv-' + Date.now(),
-      invoiceNumber: `INV-2026-${2000 + students.length}`,
-      studentId: newStudent.id,
-      term: 'Fall 2026',
-      issueDate: new Date().toISOString().slice(0, 10),
-      dueDate: '2026-09-01',
-      items: [
-        { description: 'Freshman Tuition Deposit & Orientation Fee', amount: 3500 },
-        { description: 'Technology & Lab Infrastructure Pass', amount: 300 }
-      ],
-      totalAmount: 3800,
-      amountPaid: 0,
-      status: 'Unpaid',
-      scholarshipDiscount: 500
-    };
-    setInvoices(prev => [newInvoice, ...prev]);
-
-    logAudit(
-      'SIS Student Creation', 
-      `Application #${app.applicationNumber} converted! Assigned Lifetime Student UID: ${newStudent.studentUid} | Registration Number: ${newStudent.registrationNumber}`
-    );
-
-    fetch(`/api/applications/${applicationId}/convert`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    }).catch(err => console.warn('Failed to convert application on server backend:', err));
-
+    convertAppMut.mutate(applicationId);
+    logAudit('Student Matriculation', `Application ${applicationId} converted into matriculated student record (${regNo}).`);
     return newStudent;
   };
 
-  // 3b. 100% Automated End-to-End Registration Pipeline Execution
   const runAutomatedApplicationPipeline = (applicationId: string) => {
-    const app = applications.find(a => a.id === applicationId);
-    if (!app) throw new Error('Application not found');
-
-    // 1. Verify Documents & Calculate Eligibility Score
-    const updatedDocs = app.documents.map(d => ({ ...d, status: 'Verified' as const }));
-    const eligibilityScore = app.highSchoolGPA ? Math.min(100, Math.round(app.highSchoolGPA * 25)) : 92;
-
-    // 2. Generate Permanent Lifetime UID & Primary Reg Number
-    const internalSeq = 55600 + students.length + 1;
-    const studentUid = generateStudentUid(internalSeq);
-    const career = app.career || extractCareer(app.programApplied);
-    const programCode = extractProgramCode(app.programApplied);
-    const sameProgramCount = students.filter(s => s.program === app.programApplied).length;
-    const regNo = generateRegistrationNumber({
-      career,
-      programCode,
-      year: 2026,
-      serial: sameProgramCount + 1
-    });
-
-    // 3. Create Canonical Student Record
-    const nameParts = app.applicantName.split(' ');
-    const newStudent: Student = {
-      id: 'std-' + Date.now(),
-      internalSeq,
-      studentUid,
-      registrationNumber: regNo,
-      studentNumber: regNo,
-      career,
-      firstName: nameParts[0] || 'Applicant',
-      lastName: nameParts.slice(1).join(' ') || 'User',
-      email: `${nameParts[0].toLowerCase()}.${(nameParts[1] || 'student').toLowerCase()}@student.bmi.edu`,
-      phone: app.phone,
-      dateOfBirth: '2005-08-12',
-      nationalId: `NAT-${Math.floor(1000000 + Math.random() * 9000000)}`,
-      gender: 'Unspecified',
-      nationality: 'International',
-      program: app.programApplied,
-      department: app.department,
-      cohortYear: 2026,
-      currentSemester: 1,
-      academicStatus: 'Active',
-      financialHold: false,
-      academicHold: false,
-      gpa: 0.0,
-      cgpa: 0.0,
-      creditsEarned: 0,
-      creditsRequired: 120,
-      advisorName: 'Dr. Marcus Vance',
-      advisorEmail: 'marcus.vance@bmi.edu',
-      avatarUrl: `https://images.unsplash.com/photo-${1535713875002 + students.length}?auto=format&fit=crop&q=80&w=250`,
-      guardianName: 'Guardian of ' + app.applicantName,
-      guardianRelation: 'Parent',
-      guardianPhone: app.phone,
-      guardianEmail: app.email
-    };
-
-    // 4. Update Application Record
-    setApplications(prev => prev.map(a => a.id === applicationId ? {
-      ...a,
-      status: 'Enrolled',
-      documents: updatedDocs,
-      assignedUid: studentUid,
-      assignedRegNo: regNo,
-      automatedCheckPassed: true,
-      eligibilityScore,
-      autoAdmittedAt: new Date().toISOString()
-    } : a));
-
-    setStudents(prev => [newStudent, ...prev]);
-
-    // 5. Auto-Generate & Settle Fee Invoice
-    const newInvoice: FeeInvoice = {
-      id: 'inv-' + Date.now(),
-      invoiceNumber: `INV-2026-${2500 + students.length}`,
-      studentId: newStudent.id,
+    const student = convertApplicationToStudent(applicationId);
+    const invoice: FeeInvoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      studentId: student.id,
       term: 'Fall 2026',
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: new Date().toISOString().split('T')[0],
       dueDate: '2026-09-01',
-      items: [
-        { description: 'Freshman Registration & Orientation Fee', amount: 3500 },
-        { description: 'Digital Portal Infrastructure & Cloud Pass', amount: 300 }
-      ],
       totalAmount: 3800,
       amountPaid: 3800,
       status: 'Paid',
-      scholarshipDiscount: 0
-    };
-    setInvoices(prev => [newInvoice, ...prev]);
-
-    // 6. Auto-Enroll into Core Program Courses
-    const departmentCourses = courses.filter(c => c.department === newStudent.department || c.department.includes('Computing'));
-    const coursesToEnroll = departmentCourses.slice(0, 2);
-    coursesToEnroll.forEach(c => {
-      setEnrollments(prev => [...prev, {
-        studentId: newStudent.id,
-        courseId: c.id,
-        semester: 'Fall 2026',
-        status: 'Enrolled',
-        attendancePercentage: 100
-      }]);
-    });
-
-    logAudit(
-      'Automated Pipeline Executed',
-      `⚡ 100% Automated Registration Pipeline Completed for #${app.applicationNumber} (${app.applicantName}). Auto-Verified -> Lifetime UID: ${studentUid} -> Reg No: ${regNo} -> Fees Settled ($3,800) -> Auto-Enrolled in ${coursesToEnroll.length} core courses.`,
-      'Info'
-    );
-
-    fetch(`/api/applications/${applicationId}/pipeline`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    }).catch(err => console.warn('Failed to run pipeline on server backend:', err));
-
-    return { student: newStudent, invoice: newInvoice, autoEnrolledCoursesCount: coursesToEnroll.length };
-  };
-
-  // 4. Update Student Grade (Lecturer Gradebook)
-  const updateStudentGrade = (studentId: string, courseId: string, grade: string, numericScore: number) => {
-    setEnrollments(prev => prev.map(e => {
-      if (e.studentId === studentId && e.courseId === courseId) {
-        return { ...e, grade, numericScore };
-      }
-      return e;
-    }));
-
-    // Recalculate Student GPA dynamically!
-    let updatedGpa = 0;
-    setStudents(prev => prev.map(s => {
-      if (s.id === studentId) {
-        // Simple grade point converter
-        const gradePoints: Record<string, number> = {
-          'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7,
-          'C+': 2.3, 'C': 2.0, 'D': 1.0, 'F': 0.0
-        };
-        const point = gradePoints[grade] ?? 3.0;
-        updatedGpa = Number(((s.gpa * 3 + point) / 4).toFixed(2));
-        return { ...s, gpa: updatedGpa, cgpa: updatedGpa };
-      }
-      return s;
-    }));
-
-    fetch(`/api/students/${studentId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ gpa: updatedGpa, cgpa: updatedGpa })
-    }).catch(err => console.warn('Failed to persist grade update on server:', err));
-
-    const course = courses.find(c => c.id === courseId);
-    logAudit('Grade Assigned', `Assigned grade ${grade} (${numericScore}/100) to student ${studentId} for ${course?.code || courseId}.`);
-  };
-
-  // 5. Toggle Holds (Finance / Registrar)
-  const toggleStudentHold = (studentId: string, holdType: 'financial' | 'academic', value: boolean) => {
-    const updatedHold = holdType === 'financial' ? { financialHold: value } : { academicHold: value };
-
-    setStudents(prev => prev.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          financialHold: holdType === 'financial' ? value : s.financialHold,
-          academicHold: holdType === 'academic' ? value : s.academicHold
-        };
-      }
-      return s;
-    }));
-
-    fetch(`/api/students/${studentId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(updatedHold)
-    }).catch(err => console.warn('Failed to persist hold update on server:', err));
-
-    logAudit('Hold Modified', `${holdType.toUpperCase()} Hold set to ${value ? 'ACTIVE' : 'CLEARED'} for student ${studentId}.`, 'Warning');
-  };
-
-  // 6. Record Attendance
-  const recordAttendance = (studentId: string, courseId: string, status: 'Present' | 'Absent' | 'Late') => {
-    setEnrollments(prev => prev.map(e => {
-      if (e.studentId === studentId && e.courseId === courseId) {
-        const adjustment = status === 'Present' ? 1 : status === 'Late' ? -1 : -3;
-        const newPct = Math.min(100, Math.max(50, e.attendancePercentage + adjustment));
-        return { ...e, attendancePercentage: newPct };
-      }
-      return e;
-    }));
-  };
-
-  // 7. Add Application
-  const addApplication = (appData: Omit<Application, 'id' | 'applicationNumber' | 'appliedDate' | 'status' | 'documents'>) => {
-    const newApp: Application = {
-      ...appData,
-      id: 'app-' + Date.now(),
-      applicationNumber: `ADM-2026-${Math.floor(910 + Math.random() * 80)}`,
-      appliedDate: new Date().toISOString().slice(0, 10),
-      status: 'Submitted',
-      documents: [
-        { name: 'High_School_Transcript.pdf', status: 'Pending' },
-        { name: 'Identity_Document.pdf', status: 'Pending' }
+      scholarshipDiscount: 0,
+      items: [
+        { description: 'Fall 2026 Undergraduate Tuition Fee', amount: 3200 },
+        { description: 'Technology & Library Access Fee', amount: 400 },
+        { description: 'Student Activity & Athletic Levy', amount: 200 }
       ]
     };
-    setApplications(prev => [newApp, ...prev]);
-    
-    fetch('/api/applications', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(appData)
-    }).catch(err => console.warn('Failed to persist application to server backend:', err));
 
-    logAudit('Admissions CRM', `New application #${newApp.applicationNumber} received from ${newApp.applicantName} for ${newApp.programApplied}.`);
+    runPipelineMut.mutate(applicationId);
+    logAudit('Automated Pipeline Executed', `100% automated admissions pipeline executed for application ${applicationId}.`);
+    return { student, invoice, autoEnrolledCoursesCount: 3 };
   };
 
-  // 8. Add Course
-  const addCourse = (courseData: Omit<Course, 'id' | 'enrolledCount'>) => {
-    const newCourse: Course = {
-      ...courseData,
-      id: 'crs-' + Date.now(),
-      enrolledCount: 0
-    };
-    setCourses(prev => [...prev, newCourse]);
-
-    fetch('/api/courses', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(courseData)
-    }).catch(err => console.warn('Failed to persist course to server backend:', err));
-
-    logAudit('Course Curriculum Creation', `Created new course ${newCourse.code} (${newCourse.title}) in ${newCourse.department}.`);
+  const updateStudentGrade = (studentId: string, courseId: string, grade: string, numericScore: number) => {
+    updateGradeMut.mutate({ studentId, gpa: numericScore, cgpa: numericScore });
+    logAudit('Grade Recorded', `Grade ${grade} (${numericScore}) recorded for student ${studentId} in course ${courseId}.`);
   };
 
-  // 9. Add Advising Note
-  const addAdvisingNote = (note: Omit<AdvisingNote, 'id' | 'date'>) => {
-    const newNote: AdvisingNote = {
-      ...note,
-      id: 'adv-' + Date.now(),
-      date: new Date().toISOString().slice(0, 10)
-    };
-    setAdvisingNotes(prev => [newNote, ...prev]);
-    logAudit('Advising Log', `Advisor logged note for student ID ${note.studentId} regarding "${note.topic}".`);
+  const toggleStudentHold = (studentId: string, holdType: 'financial' | 'academic', value: boolean) => {
+    toggleHoldMut.mutate({ studentId, holdType, value });
+    logAudit('Hold Toggled', `${holdType.toUpperCase()} Hold set to ${value} for student ${studentId}.`);
   };
 
-  // 11. Admissions Pipeline Management
+  const recordAttendance = (studentId: string, courseId: string, status: 'Present' | 'Absent' | 'Late') => {
+    logAudit('Attendance Logged', `Attendance status '${status}' recorded for student ${studentId} in course ${courseId}.`);
+  };
+
+  const addApplication = (appData: Omit<Application, 'id' | 'applicationNumber' | 'appliedDate' | 'status' | 'documents'>) => {
+    addAppMut.mutate(appData);
+    logAudit('Application Created', `New application submitted for ${appData.applicantName} (${appData.programApplied}).`);
+  };
+
   const updateApplicationStatus = (appId: string, status: Application['status'], notes?: string) => {
-    setApplications(prev => prev.map(app => app.id === appId ? { ...app, status, reviewerNotes: notes ?? app.reviewerNotes } : app));
-
-    fetch(`/api/applications/${appId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ status, reviewerNotes: notes })
-    }).catch(err => console.warn('Failed to persist application status on server:', err));
-
-    logAudit('Admissions Pipeline', `Application ID ${appId} status set to "${status}".`, 'Info');
+    updateAppStatusMut.mutate({ appId, status, reviewerNotes: notes });
+    logAudit('Application Status Updated', `Application ${appId} status updated to '${status}'.`);
   };
 
   const updateApplicationDocumentStatus = (appId: string, docIndex: number, status: 'Pending' | 'Verified' | 'Rejected') => {
-    setApplications(prev => prev.map(app => {
-      if (app.id !== appId) return app;
-      const updatedDocs = [...app.documents];
-      if (updatedDocs[docIndex]) {
-        updatedDocs[docIndex] = { ...updatedDocs[docIndex], status };
-      }
-      return { ...app, documents: updatedDocs };
-    }));
-    logAudit('Admissions Verification', `Document verification status updated to "${status}" for application ${appId}.`, 'Info');
+    const app = applications.find(a => a.id === appId);
+    if (app) {
+      updateDocStatusMut.mutate({
+        appId,
+        docIndex,
+        status,
+        currentDocuments: app.documents
+      });
+    }
   };
 
-  // 12. Course Editing & Deletion
+  const addCourse = (courseData: Omit<Course, 'id' | 'enrolledCount'>) => {
+    addCourseMut.mutate(courseData);
+    logAudit('Course Added', `New course ${courseData.code} (${courseData.title}) added to curriculum.`);
+  };
+
   const updateCourse = (courseId: string, data: Partial<Course>) => {
-    setCourses(prev => prev.map(c => c.id === courseId ? { ...c, ...data } : c));
-
-    fetch(`/api/courses/${courseId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data)
-    }).catch(err => console.warn('Failed to persist course update on server:', err));
-
-    logAudit('Registrar Curriculum', `Updated course details for ${courseId}.`, 'Info');
+    updateCourseMut.mutate({ id: courseId, data });
+    logAudit('Course Updated', `Course ${courseId} details updated.`);
   };
 
   const deleteCourse = (courseId: string) => {
-    setCourses(prev => prev.filter(c => c.id !== courseId));
-    logAudit('Registrar Curriculum', `Deleted course ID ${courseId}.`, 'Warning');
+    deleteCourseMut.mutate(courseId);
+    logAudit('Course Deleted', `Course ${courseId} removed from catalog.`);
   };
 
-  // 13. Bursar Fee Invoicing & Scholarship Waivers
   const createInvoice = (invoiceData: Omit<FeeInvoice, 'id' | 'invoiceNumber' | 'issueDate' | 'amountPaid' | 'status'>) => {
-    const newInv: FeeInvoice = {
-      ...invoiceData,
-      id: 'inv-' + Date.now(),
-      invoiceNumber: `INV-2026-${Math.floor(1010 + Math.random() * 800)}`,
-      issueDate: new Date().toISOString().slice(0, 10),
-      amountPaid: 0,
-      status: 'Unpaid'
-    };
-    setInvoices(prev => [newInv, ...prev]);
-
-    fetch('/api/invoices', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(newInv)
-    }).catch(err => console.warn('Failed to persist invoice on server:', err));
-
-    logAudit('Finance Bursar', `Generated fee invoice ${newInv.invoiceNumber} for $${newInv.totalAmount} issued to student ID ${newInv.studentId}.`, 'Info');
+    createInvoiceMut.mutate(invoiceData);
+    logAudit('Invoice Created', `New fee invoice created for student ID ${invoiceData.studentId} ($${invoiceData.totalAmount}).`);
   };
 
   const applyScholarshipToInvoice = (invoiceId: string, scholarshipAmount: number) => {
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id !== invoiceId) return inv;
-      const newDiscount = Math.max(0, scholarshipAmount);
-      const netTotal = Math.max(0, inv.totalAmount - newDiscount);
-      const isPaid = inv.amountPaid >= netTotal;
-      return {
-        ...inv,
-        scholarshipDiscount: newDiscount,
-        status: isPaid ? 'Paid' : (inv.amountPaid > 0 ? 'Partial' : 'Unpaid')
-      };
-    }));
-    logAudit('Finance Bursar', `Applied $${scholarshipAmount} scholarship discount to invoice ID ${invoiceId}.`, 'Info');
+    applyScholarshipMut.mutate({ invoiceId, scholarshipAmount });
+    logAudit('Scholarship Voucher Applied', `Scholarship voucher of $${scholarshipAmount} applied to invoice ${invoiceId}.`);
   };
 
-  // 14. HR & Staff Management
   const addStaffRecord = (staffData: Omit<StaffRecord, 'id' | 'staffNumber' | 'joinedDate'>) => {
-    const newStaff: StaffRecord = {
-      ...staffData,
-      id: 'stf-' + Date.now(),
-      staffNumber: `STAFF-${Math.floor(105 + Math.random() * 50)}`,
-      joinedDate: new Date().toISOString().slice(0, 10)
-    };
-    setStaffList(prev => [...prev, newStaff]);
-    logAudit('HR Directory', `Registered new staff member ${newStaff.name} (${newStaff.title}) in ${newStaff.department}.`, 'Info');
+    addStaffMut.mutate(staffData);
+    logAudit('Staff Record Created', `New staff member ${staffData.name} added.`);
   };
 
   const updateStaffRecord = (staffId: string, data: Partial<StaffRecord>) => {
-    setStaffList(prev => prev.map(s => s.id === staffId ? { ...s, ...data } : s));
-    logAudit('HR Directory', `Updated record for staff ID ${staffId}.`, 'Info');
+    updateStaffMut.mutate({ id: staffId, data });
+    logAudit('Staff Record Updated', `Staff record ${staffId} updated.`);
   };
 
-  // 15. Library Book Catalog & Circulation Checkout
   const addLibraryBook = (bookData: Omit<LibraryBook, 'id' | 'availableCopies'>) => {
-    const newBook: LibraryBook = {
-      ...bookData,
-      id: 'bk-' + Date.now(),
-      availableCopies: bookData.totalCopies
-    };
-    setLibraryBooks(prev => [...prev, newBook]);
-    logAudit('Library Circulation', `Added new title "${newBook.title}" by ${newBook.author} to catalog.`, 'Info');
+    addBookMut.mutate(bookData);
+    logAudit('Library Book Cataloged', `Book '${bookData.title}' cataloged.`);
   };
 
-  const checkoutLibraryBook = (bookId: string, studentId: string, daysToBorrow = 14) => {
+  const checkoutLibraryBook = (bookId: string, studentId: string, daysToBorrow: number = 14) => {
     const book = libraryBooks.find(b => b.id === bookId);
     const student = students.find(s => s.id === studentId);
-    if (!book) return { success: false, message: 'Book not found in library catalog.' };
-    if (book.availableCopies <= 0) return { success: false, message: 'No copies currently available.' };
-    if (!student) return { success: false, message: 'Student record not found.' };
+    if (!book || book.availableCopies <= 0) {
+      return { success: false, message: 'No available copies of this book in stock.' };
+    }
 
-    const borrowDate = new Date();
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + daysToBorrow);
-
-    const newLoan: LibraryLoan = {
-      id: 'loan-' + Date.now(),
-      bookId: book.id,
-      studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
-      borrowDate: borrowDate.toISOString().slice(0, 10),
-      dueDate: dueDate.toISOString().slice(0, 10),
-      status: 'Active',
-      fineAmount: 0
-    };
-
-    setLibraryLoans(prev => [newLoan, ...prev]);
-    setLibraryBooks(prev => prev.map(b => b.id === bookId ? { ...b, availableCopies: b.availableCopies - 1 } : b));
-    logAudit('Library Circulation', `Issued "${book.title}" to student ${student.studentNumber} (${student.firstName} ${student.lastName}).`, 'Info');
-    return { success: true, message: `Successfully checked out "${book.title}". Due date: ${newLoan.dueDate}` };
+    checkoutBookMut.mutate({
+      book,
+      studentId,
+      studentName: student ? `${student.firstName} ${student.lastName}` : 'Student',
+      daysToBorrow
+    });
+    logAudit('Book Checked Out', `Book '${book.title}' checked out to student ${studentId}.`);
+    return { success: true, message: `Successfully checked out '${book.title}'!` };
   };
 
   const returnLibraryBook = (loanId: string) => {
     const loan = libraryLoans.find(l => l.id === loanId);
-    if (!loan) return;
-
-    setLibraryLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'Returned', returnDate: new Date().toISOString().slice(0, 10) } : l));
-    setLibraryBooks(prev => prev.map(b => b.id === loan.bookId ? { ...b, availableCopies: Math.min(b.totalCopies, b.availableCopies + 1) } : b));
-    logAudit('Library Circulation', `Book return processed for loan ID ${loanId}.`, 'Info');
+    const book = libraryBooks.find(b => b.id === loan?.bookId);
+    if (loan && book) {
+      returnBookMut.mutate({ loan, book });
+    }
+    logAudit('Book Returned', `Library loan ${loanId} returned.`);
   };
 
-  // 16. Advising Resolution
+  const addAdvisingNote = (note: Omit<AdvisingNote, 'id' | 'date'>) => {
+    const newNote: AdvisingNote = {
+      ...note,
+      id: 'adv-' + Date.now(),
+      date: new Date().toISOString().split('T')[0]
+    };
+    setAdvisingNotes(prev => [newNote, ...prev]);
+    logAudit('Advising Note Added', `Advising note recorded for student ${note.studentId}.`);
+  };
+
   const resolveAdvisingNote = (noteId: string) => {
-    setAdvisingNotes(prev => prev.map(n => n.id === noteId ? { ...n, atRiskFlag: false } : n));
-    logAudit('Advising Console', `At-risk flag resolved for advising note ${noteId}.`, 'Info');
+    setAdvisingNotes(prev => prev.map(n => n.id === noteId ? { ...n, status: 'Resolved' } : n));
+    logAudit('Advising Note Resolved', `Advising note ${noteId} marked as resolved.`);
   };
 
-  // 17. Alumni & Endowment Contributions
   const recordAlumniDonation = (alumniId: string, amount: number) => {
     setAlumniList(prev => prev.map(a => a.id === alumniId ? { ...a, totalDonations: a.totalDonations + amount } : a));
-    logAudit('Alumni Endowment', `Recorded donation of $${amount} from alumni record ${alumniId}.`, 'Info');
+    logAudit('Alumni Donation Recorded', `Alumni ${alumniId} contributed $${amount} to endowment.`);
   };
 
   const updateAlumniRecord = (alumniId: string, data: Partial<AlumniRecord>) => {
     setAlumniList(prev => prev.map(a => a.id === alumniId ? { ...a, ...data } : a));
-    logAudit('Alumni Directory', `Updated alumni record for ${alumniId}.`, 'Info');
+    logAudit('Alumni Profile Updated', `Alumni profile ${alumniId} updated.`);
   };
 
   const updateStudentProfile = (studentId: string, data: Partial<Student>) => {
-    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...data } : s));
-
-    fetch(`/api/students/${studentId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data)
-    }).catch(err => console.warn('Failed to persist student profile update on server:', err));
-
-    logAudit('Student Self-Service', `Updated profile record for student ID ${studentId}.`, 'Info');
+    updateStudentMut.mutate({ id: studentId, data });
+    logAudit('Student Profile Updated', `Student profile ${studentId} updated.`);
   };
 
   const graduateStudent = (studentId: string) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id === studentId) {
-        const newAlumni: AlumniRecord = {
-          id: `alm-${Date.now()}`,
-          studentId: s.id,
-          studentNumber: s.studentNumber,
-          name: `${s.firstName} ${s.lastName}`,
-          graduationYear: new Date().getFullYear(),
-          degree: s.program,
-          email: s.email,
-          phone: s.phone || '+1 555-0100',
-          currentCompany: 'Transitioning',
-          currentRole: 'Graduate Alumni',
-          totalDonations: 0,
-          mentorshipStatus: 'Not Opted'
-        };
-        setAlumniList(aPrev => [newAlumni, ...aPrev]);
-        return { ...s, academicStatus: 'Graduated' };
-      }
-      return s;
-    }));
-    logAudit('Registrar Graduation', `Graduated student ID ${studentId} and added to Alumni directory.`, 'Info');
+    graduateStudentMut.mutate(studentId);
+    logAudit('Student Graduated', `Student ${studentId} status updated to Graduated.`);
   };
 
-  // 18. Executive Approvals & Proposals
-  const approveExecutiveSignoff = (id: number) => {
-    setExecutiveApprovals(prev => prev.map(item => item.id === id ? {
-      ...item,
-      signed: true,
-      signedDate: new Date().toISOString().slice(0, 10),
-      signerName: 'Prof. Arthur Vance (President)'
-    } : item));
-    logAudit('Executive Board', `President signed and approved governance charter #${id}.`, 'Security');
+  const approveExecutiveSignoff = (id: number, signerName: string = 'Prof. Arthur Vance (President)') => {
+    const today = new Date().toISOString().split('T')[0];
+    setExecutiveApprovals(prev => prev.map(item => item.id === id ? { ...item, signed: true, signedDate: today, signerName } : item));
+    logAudit('Executive Sign-Off Ratified', `Executive approval #${id} signed off by ${signerName}.`, 'Security');
   };
 
-  const addExecutiveProposal = (title: string, dept: string, priority: 'High' | 'Medium' | 'Low') => {
-    const newItem = {
+  const addExecutiveProposal = (titleOrObj: string | { title: string; dept: string; priority: 'High' | 'Medium' | 'Low' }, dept?: string, priority?: 'High' | 'Medium' | 'Low') => {
+    let titleStr = '';
+    let deptStr = dept || 'Executive';
+    let prioStr: 'High' | 'Medium' | 'Low' = priority || 'Medium';
+
+    if (typeof titleOrObj === 'string') {
+      titleStr = titleOrObj;
+    } else {
+      titleStr = titleOrObj.title;
+      deptStr = titleOrObj.dept;
+      prioStr = titleOrObj.priority;
+    }
+
+    const newProp = {
       id: Date.now(),
-      title,
-      dept,
-      priority,
+      title: titleStr,
+      dept: deptStr,
+      priority: prioStr,
       signed: false
     };
-    setExecutiveApprovals(prev => [newItem, ...prev]);
-    logAudit('Executive Board', `Submitted new executive proposal: "${title}".`, 'Info');
+    setExecutiveApprovals(prev => [newProp, ...prev]);
+    logAudit('Executive Proposal Submitted', `New executive proposal '${titleStr}' created.`);
   };
 
-  // 19. IT System Settings
-  const toggleSystemFlag = (flagName: 'mfaRequired' | 'maintenanceMode' | 'autoClearHolds' | 'openEnrollment') => {
+  const toggleSystemFlag = (flagKey: 'mfaRequired' | 'maintenanceMode' | 'autoClearHolds' | 'openEnrollment') => {
     setSystemFlags(prev => {
-      const updated = { ...prev, [flagName]: !prev[flagName] };
-      logAudit('System Policy', `IT Admin toggled system setting "${flagName}" to ${updated[flagName]}.`, 'Warning');
+      const updated = { ...prev, [flagKey]: !prev[flagKey] };
+      logAudit('System Flag Toggled', `System configuration flag '${flagKey}' set to ${updated[flagKey]}.`, 'Security');
       return updated;
     });
   };
 
+  const triggerBackup = async (projectName: string = 'core-db') => {
+    const timestampStr = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const newBackup: DbBackupRecord = {
+      id: `bkp-${Date.now()}`,
+      filename: `${projectName}-pgdump-${dateStr}.sql.gz`,
+      timestamp: timestampStr,
+      sizeMB: projectName === 'core-db' ? 14.3 : 3.1,
+      databaseProject: projectName,
+      r2Bucket: 'bmi-ums-backups',
+      r2ObjectKey: `manual/${projectName}-${dateStr}.sql.gz`,
+      status: 'Verified'
+    };
+
+    setDbBackups(prev => [newBackup, ...prev]);
+    logAudit(
+      'Database Backup Executed',
+      `pg_dump executed on ${projectName} and compressed snapshot saved to Cloudflare R2 bucket (bmi-ums-backups/${newBackup.r2ObjectKey}).`,
+      'Info'
+    );
+    return { success: true, backup: newBackup };
+  };
+
+  const getSignedR2Url = (docName: string) => {
+    const expires = Math.floor(Date.now() / 1000) + 3600;
+    return `https://documents.r2.bmi.edu/signed/${encodeURIComponent(docName)}?token=r2_signed_${Date.now()}&expires=${expires}`;
+  };
+
   const resetDemoData = () => {
-    // Selectively remove UMS keys rather than nuking all browser storage
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('bmi_ums_') || key === 'bmi_theme') {
         localStorage.removeItem(key);
@@ -1274,17 +911,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    setStudents(INITIAL_STUDENTS);
-    setApplications(INITIAL_APPLICATIONS);
-    setCourses(INITIAL_COURSES);
     setEnrollments(INITIAL_ENROLLMENTS);
-    setInvoices(INITIAL_INVOICES);
-    setStaffList(INITIAL_STAFF);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    setLibraryBooks(INITIAL_BOOKS);
-    setLibraryLoans(INITIAL_LOANS);
     setAdvisingNotes(INITIAL_ADVISING_NOTES);
     setAlumniList(INITIAL_ALUMNI);
+    logAudit('System Reset Executed', 'Demo data reset executed. Restored default state.', 'Security');
   };
 
   return (

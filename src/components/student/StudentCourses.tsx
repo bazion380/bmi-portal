@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents, useCourses } from '../../hooks/api';
+import { useAuthStore } from '../../store/useAuthStore';
 import { BookOpen, User, Clock, MapPin, FileText, CheckCircle, MessageSquare, Send, CheckCircle2, Upload, X } from 'lucide-react';
 
 export const StudentCourses: React.FC = () => {
-  const { students, activeStudentId, enrollments, courses } = useApp();
+  const { data: students = [] } = useStudents();
+  const { data: courses = [] } = useCourses();
+  const { activeStudentId } = useAuthStore();
+  const { enrollments } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'Enrolled');

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useCourses } from '../../hooks/api';
 import { Calendar, CheckCircle2, ShieldCheck, MapPin } from 'lucide-react';
 
 export const ExamView: React.FC = () => {
-  const { courses } = useApp();
+  const { data: courses = [] } = useCourses();
   const [released, setReleased] = useState(false);
 
   return (

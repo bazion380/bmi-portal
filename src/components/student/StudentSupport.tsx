@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents } from '../../hooks/api';
+import { useAuthStore } from '../../store/useAuthStore';
 import { 
   HelpCircle, 
   UserCheck, 
@@ -11,7 +13,9 @@ import {
 } from 'lucide-react';
 
 export const StudentSupport: React.FC = () => {
-  const { students, activeStudentId, advisingNotes, addAdvisingNote } = useApp();
+  const { data: students = [] } = useStudents();
+  const { activeStudentId } = useAuthStore();
+  const { advisingNotes, addAdvisingNote } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myNotes = advisingNotes.filter(n => n.studentId === student.id);
