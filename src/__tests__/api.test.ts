@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateStudentUid, generateRegistrationNumber } from '../utils/studentIdGenerator';
+import { signToken, verifyToken } from '../../server/middlewares/auth';
 
 describe('Student Identification Generator Suite', () => {
   it('generates an immutable Base36 Lifetime Student UID with correct BMI prefix', () => {
@@ -34,37 +35,100 @@ describe('Student Identification Generator Suite', () => {
   });
 });
 
-describe('Authentication & Token Helper Suite', () => {
-  it('encodes and decodes token payloads correctly', () => {
-    const payload = { role: 'registrar', name: 'Dr. Vance', time: Date.now() };
-    const token = Buffer.from(JSON.stringify(payload)).toString('base64');
-    
-    const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    expect(decoded.role).toBe('registrar');
-    expect(decoded.name).toBe('Dr. Vance');
+describe('Academic & Financial Business Rules Suite', () => {
+  it('calculates GPA correctly from course grade scale', () => {
+    const gradePoints: Record<string, number> = {
+      'A': 4.0,
+      'A-': 3.7,
+      'B+': 3.3,
+      'B': 3.0,
+      'C+': 2.3,
+      'F': 0.0
+    };
+
+    const studentCourses = [
+      { credits: 3, grade: 'A' },
+      { credits: 4, grade: 'B+' },
+      { credits: 3, grade: 'A-' }
+    ];
+
+    let totalPoints = 0;
+    let totalCredits = 0;
+
+    studentCourses.forEach(c => {
+      totalPoints += (gradePoints[c.grade] || 0) * c.credits;
+      totalCredits += c.credits;
+    });
+
+    const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
+    expect(Number(gpa.toFixed(2))).toBe(3.63);
   });
 
-  it('validates HMAC signed tokens correctly', () => {
-    const crypto = require('crypto');
-    const secret = 'bmi_ums_secure_token_secret_2026';
-    const payload = { role: 'president', name: 'Prof. Arthur Vance', exp: Date.now() + 3600000 };
-    
-    const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const signature = crypto.createHmac('sha256', secret).update(payloadStr).digest('base64url');
-    const token = `${payloadStr}.${signature}`;
+  it('prevents course registration when a financial hold is active', () => {
+    const student = {
+      id: 'std-101',
+      financialHold: true,
+      academicHold: false
+    };
 
-    const parts = token.split('.');
-    expect(parts.length).toBe(2);
-
-    const expectedSig = crypto.createHmac('sha256', secret).update(parts[0]).digest('base64url');
-    expect(parts[1]).toBe(expectedSig);
+    const isEligibleForRegistration = !student.financialHold && !student.academicHold;
+    expect(isEligibleForRegistration).toBe(false);
   });
 
-  it('validates role permissions correctly', () => {
-    const allowedRoles = ['registrar', 'admissions'];
-    
-    expect(allowedRoles.includes('registrar')).toBe(true);
-    expect(allowedRoles.includes('student')).toBe(false);
+  it('allows course registration when all holds are cleared', () => {
+    const student = {
+      id: 'std-101',
+      financialHold: false,
+      academicHold: false
+    };
+
+    const isEligibleForRegistration = !student.financialHold && !student.academicHold;
+    expect(isEligibleForRegistration).toBe(true);
   });
 });
+
+describe('Authentication & Token Security Suite', () => {
+  it('signs and verifies HMAC tokens securely', () => {
+    const payload = {
+      role: 'president' as const,
+      name: 'Prof. Arthur Vance',
+      issuedAt: Date.now(),
+      exp: Date.now() + 3600000
+    };
+    const token = signToken(payload);
+    
+    const verified = verifyToken(token);
+    expect(verified).not.toBeNull();
+    expect(verified?.role).toBe('president');
+    expect(verified?.name).toBe('Prof. Arthur Vance');
+  });
+
+  it('rejects tampered tokens', () => {
+    const payload = {
+      role: 'registrar' as const,
+      name: 'Dr. Vance',
+      issuedAt: Date.now(),
+      exp: Date.now() + 3600000
+    };
+    const token = signToken(payload);
+    const tampered = token + 'tamper';
+
+    const verified = verifyToken(tampered);
+    expect(verified).toBeNull();
+  });
+
+  it('rejects expired tokens', () => {
+    const payload = {
+      role: 'registrar' as const,
+      name: 'Dr. Vance',
+      issuedAt: Date.now() - 7200000,
+      exp: Date.now() - 3600000
+    };
+    const token = signToken(payload);
+
+    const verified = verifyToken(token);
+    expect(verified).toBeNull();
+  });
+});
+
 

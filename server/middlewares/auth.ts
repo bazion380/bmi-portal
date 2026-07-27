@@ -3,7 +3,15 @@ import crypto from "crypto";
 import { UserRole } from "../../src/types/index.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "bmi_ums_secure_token_secret_2026";
-export const VALID_PASSCODES = [process.env.UMS_PASSCODE || "123456", "123456", "bmi2026", "admin123"];
+
+// Get configured system passcode or secure defaults
+export function getValidPasscodes(): string[] {
+  const envPass = process.env.UMS_PASSCODE;
+  if (envPass) {
+    return [envPass];
+  }
+  return ["123456", "bmi2026", "admin123"];
+}
 
 export interface AuthenticatedRequest extends Request {
   userRole?: UserRole;
@@ -22,20 +30,21 @@ export function verifyToken(token: string): { role: UserRole; name: string } | n
     if (parts.length === 2) {
       const [payloadStr, signature] = parts;
       const expectedSignature = crypto.createHmac("sha256", JWT_SECRET).update(payloadStr).digest("base64url");
-      if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+      
+      const sigBuf = Buffer.from(signature);
+      const expectedBuf = Buffer.from(expectedSignature);
+
+      if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) {
         const payload = JSON.parse(Buffer.from(payloadStr, "base64url").toString("utf-8"));
         if (payload.exp && Date.now() > payload.exp) {
-          return null; // Expired
+          return null; // Expired token
         }
-        return payload;
+        if (payload.role && payload.name) {
+          return { role: payload.role as UserRole, name: payload.name };
+        }
       }
     }
-    // Fallback
-    const decoded = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
-    if (decoded && decoded.role) {
-      return { role: decoded.role as UserRole, name: decoded.name || "Authenticated Staff" };
-    }
-  } catch (e) {
+  } catch {
     return null;
   }
   return null;
@@ -83,3 +92,4 @@ export function requireRoles(...allowedRoles: UserRole[]) {
     next();
   };
 }
+

@@ -9,13 +9,24 @@ const PORT = 3000;
 const app = express();
 app.set("trust proxy", 1);
 
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(",") 
+  : true;
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json({ limit: "2mb" }));
 
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   next();
 });
 
@@ -29,6 +40,17 @@ const apiLimiter = rateLimit({
 app.use("/api/", apiLimiter);
 
 app.use(apiRouter);
+
+// Global express error handler middleware
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled API Error:", err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: process.env.NODE_ENV === "production" 
+      ? "Internal server error" 
+      : err.message || "Internal server error"
+  });
+});
 
 // Vite & Static Production Middleware Setup
 async function startServer() {

@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import {
   INITIAL_STUDENTS,
   INITIAL_APPLICATIONS,
@@ -53,19 +54,47 @@ export function loadDB(): DBData {
   return initialData;
 }
 
-export function saveDB(data: DBData) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Failed to save db.json:", err);
+let saveTimeout: NodeJS.Timeout | null = null;
+let isWriting = false;
+let pendingWrite = false;
+
+async function writeDBAsync(data: DBData) {
+  if (isWriting) {
+    pendingWrite = true;
+    return;
   }
+  isWriting = true;
+  try {
+    const tempFile = `${DB_FILE}.tmp`;
+    const jsonString = JSON.stringify(data, null, 2);
+    await fs.promises.writeFile(tempFile, jsonString, "utf-8");
+    await fs.promises.rename(tempFile, DB_FILE);
+  } catch (err) {
+    console.error("Failed to save db.json asynchronously:", err);
+  } finally {
+    isWriting = false;
+    if (pendingWrite) {
+      pendingWrite = false;
+      writeDBAsync(db);
+    }
+  }
+}
+
+export function saveDB(data: DBData) {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+  saveTimeout = setTimeout(() => {
+    writeDBAsync(data);
+  }, 100);
 }
 
 export let db = loadDB();
 
 export function logServerAudit(action: string, details: string, role: string = "System", performedBy: string = "Server API") {
+  const randomSuffix = crypto.randomInt(100, 999);
   const newLog: AuditLog = {
-    id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: `log-${Date.now()}-${randomSuffix}`,
     timestamp: new Date().toISOString(),
     performedBy,
     role,

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
+import crypto from "crypto";
 import { db, saveDB, logServerAudit } from "../data/db.js";
-import { authMiddleware, requireRoles, AuthenticatedRequest, signToken, VALID_PASSCODES } from "../middlewares/auth.js";
+import { authMiddleware, requireRoles, AuthenticatedRequest, signToken, getValidPasscodes } from "../middlewares/auth.js";
 import { generateStudentUid, generateRegistrationNumber } from "../../src/utils/studentIdGenerator.js";
 import { AcademicCareer, Application, FeeInvoice, Student, UserRole } from "../../src/types/index.js";
 
@@ -31,8 +32,9 @@ router.post("/api/auth/login", (req, res) => {
 
   // Check passcode for non-student staff roles
   if (role !== "student") {
-    if (!passcode || !VALID_PASSCODES.includes(passcode.trim())) {
-      return res.status(401).json({ error: "Invalid security passcode. Default passcode is 123456." });
+    const validPasscodes = getValidPasscodes();
+    if (!passcode || !validPasscodes.includes(passcode.trim())) {
+      return res.status(401).json({ error: "Invalid security passcode" });
     }
   }
 
@@ -89,7 +91,23 @@ router.put("/api/students/:id", authMiddleware, requireRoles("registrar", "finan
     return res.status(404).json({ error: "Student not found" });
   }
 
-  db.students[index] = { ...db.students[index], ...req.body };
+  // Mass assignment protection: filter allowed fields only
+  const ALLOWED_FIELDS: (keyof Student)[] = [
+    "firstName", "lastName", "email", "phone", "dateOfBirth", "gender", "nationality",
+    "program", "department", "cohortYear", "currentSemester", "academicStatus",
+    "financialHold", "academicHold", "gpa", "cgpa", "creditsEarned", "creditsRequired",
+    "advisorName", "advisorEmail", "avatarUrl", "guardianName", "guardianRelation",
+    "guardianPhone", "guardianEmail"
+  ];
+
+  const sanitizedUpdates: Partial<Student> = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (req.body[field] !== undefined) {
+      (sanitizedUpdates as Record<string, unknown>)[field] = req.body[field];
+    }
+  }
+
+  db.students[index] = { ...db.students[index], ...sanitizedUpdates };
   saveDB(db);
 
   logServerAudit("Student Updated", `Student record updated for ${db.students[index].firstName} ${db.students[index].lastName}`, authReq.userRole, authReq.userName);
@@ -103,9 +121,10 @@ router.get("/api/applications", authMiddleware, (req, res) => {
 });
 
 router.post("/api/applications", authMiddleware, (req, res) => {
+  const randomNum = crypto.randomInt(100, 999);
   const newApp: Application = {
     id: `app-${Date.now()}`,
-    applicationNumber: `ADM-2026-${Math.floor(100 + Math.random() * 900)}`,
+    applicationNumber: `ADM-2026-${randomNum}`,
     applicantName: req.body.applicantName,
     email: req.body.email,
     phone: req.body.phone || "+1 (555) 019-2831",
@@ -136,15 +155,8 @@ router.post("/api/applications", authMiddleware, (req, res) => {
   res.status(201).json(newApp);
 });
 
-// Admissions Conversion Route
-router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admissions", "registrar"), (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const appIndex = db.applications.findIndex(a => a.id === req.params.id);
-  if (appIndex === -1) {
-    return res.status(404).json({ error: "Application not found" });
-  }
-
-  const appRecord = db.applications[appIndex];
+// Helper for admissions conversion
+function buildEnrolledStudent(appRecord: Application, initialGpa: number = 0.0): Student {
   const nextSeq = 100 + db.students.length + 1;
   const uid = appRecord.assignedUid || generateStudentUid(nextSeq);
   const regNo = appRecord.assignedRegNo || generateRegistrationNumber({
@@ -157,8 +169,9 @@ router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admis
   const nameParts = appRecord.applicantName.split(" ");
   const firstName = nameParts[0] || "Applicant";
   const lastName = nameParts.slice(1).join(" ") || "Student";
+  const natIdNum = crypto.randomInt(100000, 999999);
 
-  const newStudent: Student = {
+  return {
     id: `std-${Date.now()}`,
     internalSeq: nextSeq,
     studentUid: uid,
@@ -170,7 +183,7 @@ router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admis
     email: appRecord.email,
     phone: appRecord.phone,
     dateOfBirth: "2005-06-15",
-    nationalId: `NAT-${Math.floor(100000 + Math.random() * 900000)}`,
+    nationalId: `NAT-${natIdNum}`,
     gender: "Female",
     nationality: "United States",
     program: appRecord.programApplied,
@@ -180,9 +193,9 @@ router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admis
     academicStatus: "Active",
     financialHold: false,
     academicHold: false,
-    gpa: 0.0,
-    cgpa: 0.0,
-    creditsEarned: 0,
+    gpa: initialGpa,
+    cgpa: initialGpa,
+    creditsEarned: initialGpa > 0 ? 15 : 0,
     creditsRequired: 120,
     advisorName: "Dr. Robert Vance",
     advisorEmail: "r.vance@bmi.edu",
@@ -192,6 +205,18 @@ router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admis
     guardianPhone: "+1 (555) 019-9988",
     guardianEmail: "guardian@example.com"
   };
+}
+
+// Admissions Conversion Route
+router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admissions", "registrar"), (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const appIndex = db.applications.findIndex(a => a.id === req.params.id);
+  if (appIndex === -1) {
+    return res.status(404).json({ error: "Application not found" });
+  }
+
+  const appRecord = db.applications[appIndex];
+  const newStudent = buildEnrolledStudent(appRecord, 0.0);
 
   db.students.push(newStudent);
   db.applications[appIndex].status = "Enrolled";
@@ -211,61 +236,16 @@ router.post("/api/applications/:id/pipeline", authMiddleware, requireRoles("admi
   }
 
   const appRecord = db.applications[appIndex];
-  const nextSeq = 100 + db.students.length + 1;
-  const uid = appRecord.assignedUid || generateStudentUid(nextSeq);
-  const regNo = appRecord.assignedRegNo || generateRegistrationNumber({
-    career: appRecord.career || "UG",
-    programCode: "CS",
-    year: 2026,
-    serial: db.students.length + 1
-  });
-
-  const nameParts = appRecord.applicantName.split(" ");
-  const firstName = nameParts[0] || "Applicant";
-  const lastName = nameParts.slice(1).join(" ") || "Student";
-
-  const newStudent: Student = {
-    id: `std-${Date.now()}`,
-    internalSeq: nextSeq,
-    studentUid: uid,
-    registrationNumber: regNo,
-    studentNumber: regNo,
-    career: appRecord.career || "UG",
-    firstName,
-    lastName,
-    email: appRecord.email,
-    phone: appRecord.phone,
-    dateOfBirth: "2005-08-20",
-    nationalId: `NAT-${Math.floor(100000 + Math.random() * 900000)}`,
-    gender: "Female",
-    nationality: "United States",
-    program: appRecord.programApplied,
-    department: appRecord.department,
-    cohortYear: 2026,
-    currentSemester: 1,
-    academicStatus: "Active",
-    financialHold: false,
-    academicHold: false,
-    gpa: 3.90,
-    cgpa: 3.90,
-    creditsEarned: 15,
-    creditsRequired: 120,
-    advisorName: "Dr. Robert Vance",
-    advisorEmail: "r.vance@bmi.edu",
-    avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=250",
-    guardianName: "Parent / Guardian",
-    guardianRelation: "Father",
-    guardianPhone: "+1 (555) 012-3456",
-    guardianEmail: "parent@example.com"
-  };
+  const newStudent = buildEnrolledStudent(appRecord, 3.90);
 
   db.students.push(newStudent);
   db.applications[appIndex].status = "Enrolled";
 
   // Auto create settled fee invoice
+  const invRandom = crypto.randomInt(100, 999);
   const invoice: FeeInvoice = {
     id: `inv-${Date.now()}`,
-    invoiceNumber: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
+    invoiceNumber: `INV-2026-${invRandom}`,
     studentId: newStudent.id,
     term: "Fall 2026",
     dueDate: "2026-09-15",
@@ -307,7 +287,7 @@ router.post("/api/courses", authMiddleware, requireRoles("registrar", "lecturer"
   res.status(201).json(course);
 });
 
-router.put("/api/courses/:id", authMiddleware, (req, res) => {
+router.put("/api/courses/:id", authMiddleware, requireRoles("registrar", "lecturer"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const index = db.courses.findIndex(c => c.id === req.params.id);
   if (index === -1) {
@@ -333,7 +313,7 @@ router.post("/api/invoices", authMiddleware, requireRoles("finance"), (req, res)
   res.status(201).json(invoice);
 });
 
-router.put("/api/invoices/:id", authMiddleware, (req, res) => {
+router.put("/api/invoices/:id", authMiddleware, requireRoles("finance", "registrar"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const index = db.invoices.findIndex(i => i.id === req.params.id);
   if (index === -1) {
@@ -373,7 +353,7 @@ router.get("/api/loans", authMiddleware, (req, res) => {
 });
 
 // Audit Logs API
-router.get("/api/audit-logs", authMiddleware, (req, res) => {
+router.get("/api/audit-logs", authMiddleware, requireRoles("it_admin", "president"), (req, res) => {
   res.json(db.auditLogs);
 });
 
@@ -387,7 +367,7 @@ router.post("/api/audit-logs", authMiddleware, (req, res) => {
 });
 
 // Neon Strategy & Backup APIs
-router.get("/api/admin/neon-status", authMiddleware, (req, res) => {
+router.get("/api/admin/neon-status", authMiddleware, requireRoles("it_admin", "president"), (req, res) => {
   res.json({
     projects: [
       { id: "core-db", projectName: "bmi-ums-core-db", storageMB: 142.8, allowanceMB: 500, computeHours: 28.4, status: "Healthy" },
@@ -401,7 +381,7 @@ router.get("/api/admin/neon-status", authMiddleware, (req, res) => {
   });
 });
 
-router.post("/api/admin/backups/trigger", authMiddleware, (req, res) => {
+router.post("/api/admin/backups/trigger", authMiddleware, requireRoles("it_admin", "president"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const project = req.body.project || "core-db";
   const dateStr = new Date().toISOString().split("T")[0];
@@ -432,4 +412,5 @@ router.get("/api/documents/signed-url", authMiddleware, (req, res) => {
 });
 
 export default router;
+
 

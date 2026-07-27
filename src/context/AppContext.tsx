@@ -345,7 +345,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [authUser, setAuthUserState] = useState<{ name: string; role: UserRole } | null>(() => {
     const saved = sessionStorage.getItem('bmi_ums_auth_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      sessionStorage.removeItem('bmi_ums_auth_user');
+      return null;
+    }
   });
 
   const setAuthToken = (token: string | null) => {
@@ -1301,7 +1307,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetDemoData = () => {
-    localStorage.clear();
+    // Selectively remove UMS keys rather than nuking all browser storage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('bmi_ums_') || key === 'bmi_theme') {
+        localStorage.removeItem(key);
+      }
+    });
+    Object.keys(sessionStorage).forEach(key => {
+      if (key.startsWith('bmi_ums_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+
     setStudents(INITIAL_STUDENTS);
     setApplications(INITIAL_APPLICATIONS);
     setCourses(INITIAL_COURSES);
