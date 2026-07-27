@@ -35,7 +35,7 @@ import {
   generateStudentUid,
   generateRegistrationNumber
 } from '../utils/studentIdGenerator';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore } from '../store/useAuthStore';
 import {
   useStudents,
   useUpdateStudent,
@@ -116,6 +116,7 @@ interface AppContextType {
   // Authentication & Security
   authToken: string | null;
   authUser: { name: string; role: UserRole } | null;
+  setAuth: (token: string | null, user: { name: string; role: UserRole } | null) => void;
   setAuthToken: (token: string | null) => void;
   setAuthUser: (user: { name: string; role: UserRole } | null) => void;
 
@@ -177,12 +178,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     activeRole,
     currentPortal,
     activeStudentId,
-    setAuthToken,
-    setAuthUser,
+    setAuth,
     setActiveRole,
     setCurrentPortal,
     setActiveStudentId,
   } = useAuthStore();
+
+  const setAuthToken = (token: string | null) => useAuthStore.getState().setAuth(token, useAuthStore.getState().authUser);
+  const setAuthUser = (user: { name: string; role: UserRole } | null) => useAuthStore.getState().setAuth(useAuthStore.getState().authToken, user);
 
   // Theme state
   const [theme, setThemeState] = useState<ThemeMode>(() => {
@@ -203,10 +206,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { data: serverBooks } = useBooks();
   const { data: serverLoans } = useLoans();
   const { data: serverAuditLogs } = useAuditLogs();
-
-
-
-
 
   // Local fallback states for local-only entities & instant offline capability
   const [enrollments, setEnrollments] = useState<StudentCourseEnrollment[]>(() => {
@@ -675,9 +674,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addExecutiveProposal = (titleOrObj: string | { title: string; dept: string; priority: 'High' | 'Medium' | 'Low' }, dept?: string, priority?: 'High' | 'Medium' | 'Low') => {
+    let titleStr = '';
     let deptStr = dept || 'Executive';
     let prioStr: 'High' | 'Medium' | 'Low' = priority || 'Medium';
-    let titleStr: string;
 
     if (typeof titleOrObj === 'string') {
       titleStr = titleOrObj;
@@ -776,6 +775,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         systemFlags,
         authToken,
         authUser,
+        setAuth,
         setAuthToken,
         setAuthUser,
         logAudit,

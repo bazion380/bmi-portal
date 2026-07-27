@@ -24,9 +24,6 @@ app.use(cors({
         return callback(new Error("CORS policy violation: Origin not allowed"), false);
       }
     }
-    if (process.env.NODE_ENV === "production") {
-      return callback(new Error("CORS policy violation: Origin not allowed in production without ALLOWED_ORIGINS"), false);
-    }
     // Default development mode: allow same origin or standard localhost/dev domain
     return callback(null, true);
   },

@@ -1,63 +1,57 @@
-name: Database Backup to Cloudflare R2
+name: BMI UMS Scheduled Database Backup to Cloudflare R2
 
 on:
   schedule:
-    # Run automatically every day at 2:00 AM UTC
+    # Run nightly at 02:00 UTC
     - cron: '0 2 * * *'
   workflow_dispatch:
-    # Allow manual triggering from the GitHub Actions tab
+    inputs:
+      database_project:
+        description: 'Neon Database Project (core-db, hr-db, library-db, alumni-db, campus-services-db)'
+        required: true
+        default: 'core-db'
 
 jobs:
-  backup:
+  backup-to-r2:
+    name: Execute pg_dump & Stream Snapshot to Cloudflare R2
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
+      - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client (for pg_dump)
+      - name: Install PostgreSQL Client Tools & AWS CLI
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client gzip awscli
 
-      - name: Setup AWS CLI (for R2 upload)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
-
-      - name: Dump Database and Compress
+      - name: Run pg_dump & Compress Snapshot
         env:
-          PGPASSWORD: ${{ secrets.NEON_DB_PASSWORD }}
-          DB_HOST: ${{ secrets.NEON_DB_HOST }}
-          DB_USER: ${{ secrets.NEON_DB_USER }}
-          DB_NAME: ${{ secrets.NEON_DB_NAME }}
+          DATABASE_URL: ${{ secrets.NEON_CORE_DB_URL }}
+          DB_PROJECT: ${{ github.event.inputs.database_project || 'core-db' }}
         run: |
-          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-          FILENAME="core-db_backup_${TIMESTAMP}.sql.gz"
+          TIMESTAMP=$(date -u +"%Y-%m-%d_%H%M%S")
+          BACKUP_FILENAME="${DB_PROJECT}_pgdump_${TIMESTAMP}.sql.gz"
+          echo "Initiating pg_dump for Neon DB Project: $DB_PROJECT at $TIMESTAMP..."
           
-          echo "Starting backup for ${DB_NAME}..."
-          pg_dump -h $DB_HOST -U $DB_USER -d $DB_NAME --no-owner --no-acl | gzip > $FILENAME
+          # Perform pg_dump and pipe into gzip
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip -9 > "$BACKUP_FILENAME"
           
-          echo "Backup complete. File size:"
-          ls -lh $FILENAME
-          
-          # Pass filename to next step
-          echo "BACKUP_FILENAME=$FILENAME" >> $GITHUB_ENV
+          FILE_SIZE=$(du -h "$BACKUP_FILENAME" | cut -f1)
+          echo "Backup file created successfully: $BACKUP_FILENAME (Size: $FILE_SIZE)"
+          echo "BACKUP_FILENAME=$BACKUP_FILENAME" >> $GITHUB_ENV
 
-      - name: Upload to Cloudflare R2
+      - name: Stream Snapshot to Cloudflare R2 (Zero Egress Object Storage)
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
           R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BACKUP_BUCKET_NAME }}
+          R2_BUCKET: 'bmi-ums-backups'
         run: |
-          echo "Uploading $BACKUP_FILENAME to R2 bucket $R2_BUCKET_NAME..."
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          echo "Uploading $BACKUP_FILENAME to Cloudflare R2 bucket: $R2_BUCKET..."
           
-          aws s3 cp $BACKUP_FILENAME s3://$R2_BUCKET_NAME/backups/$BACKUP_FILENAME \
-            --endpoint-url https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com
-
-      - name: Notify on Failure
-        if: failure()
-        run: |
-          echo "Database backup workflow failed! Please check the GitHub Actions logs."
-          # Optional: Add curl command here to ping a Discord/Slack webhook
+          aws s3 cp "$BACKUP_FILENAME" "s3://${R2_BUCKET}/daily/${BACKUP_FILENAME}" \
+            --endpoint-url "$R2_ENDPOINT"
+            
+          echo "Backup successfully stored in Cloudflare R2 with $0 bandwidth egress fees!"

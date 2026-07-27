@@ -1,11 +1,11 @@
-# Bear Mountain Institute of Higher Learning — University Management System (BMI UMS)
+# Bethel Ministries International — Management System (BMI UMS)
 
 [![CI Pipeline](https://github.com/bmi-edu/ums-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/bmi-edu/ums-portal/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev/)
 [![Express](https://img.shields.io/badge/Express-4.21-000000.svg)](https://expressjs.com/)
 
-An enterprise-grade, multi-portal University Management System engineered for **Bear Mountain Institute of Higher Learning (BMI)**. Designed with role-based access control (RBAC), lifetime student UID generation, fee invoice processing, academic transcript tracking, and administrative governance workflows.
+An enterprise-grade, multi-portal Management System engineered for **Bethel Ministries International (BMI)**. Designed with role-based access control (RBAC), lifetime student UID generation, fee invoice processing, academic transcript tracking, and administrative governance workflows.
 
 ---
 
@@ -107,4 +107,4 @@ npm run test    # Run Vitest test suite
 
 ## License & Copyright
 
-© 2026 Bear Mountain Institute of Higher Learning. All Rights Reserved.
+© 2026 Bethel Ministries International (BMI). All Rights Reserved.

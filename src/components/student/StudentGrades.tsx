@@ -1,6 +1,5 @@
-import { useAcademicStore } from '../../store/academicStore';
 import React, { useState, useEffect } from 'react';
-
+import { useApp } from '../../context/AppContext';
 import { useStudents, useCourses } from '../../hooks/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Award, FileText, Download, CheckCircle2, X, Printer, ShieldCheck } from 'lucide-react';
@@ -17,7 +16,7 @@ export const StudentGrades: React.FC = () => {
   const { data: students = [] } = useStudents();
   const { data: courses = [] } = useCourses();
   const { activeStudentId } = useAuthStore();
-  const { enrollments } = useAcademicStore();
+  const { enrollments } = useApp();
   const student = students.find(s => s.id === activeStudentId) || students[0];
 
   const myEnrollments = enrollments.filter(e => e.studentId === student.id);
