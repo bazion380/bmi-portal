@@ -56,13 +56,15 @@ router.post("/api/auth/login", (req, res) => {
   });
 });
 
+import { StudentService } from "../services/studentService.js";
+
 // Students API
 router.get("/api/students", authMiddleware, (req, res) => {
-  res.json(db.students);
+  res.json(StudentService.getAllStudents());
 });
 
 router.get("/api/students/:id", authMiddleware, (req, res) => {
-  const student = db.students.find(s => s.id === req.params.id);
+  const student = StudentService.getStudentById(req.params.id);
   if (!student) {
     return res.status(404).json({ error: "Student not found" });
   }
@@ -71,48 +73,31 @@ router.get("/api/students/:id", authMiddleware, (req, res) => {
 
 router.post("/api/students", authMiddleware, requireRoles("registrar", "admissions"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const studentData: Student = req.body;
-  if (!studentData.firstName || !studentData.lastName || !studentData.email) {
-    return res.status(400).json({ error: "Missing required biographic fields" });
+  try {
+    const student = StudentService.createStudent(
+      req.body, 
+      authReq.userRole || "unknown", 
+      authReq.userName || "unknown"
+    );
+    res.status(201).json(student);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
-
-  db.students.push(studentData);
-  saveDB(db);
-
-  logServerAudit("Student Created", `New SIS student record created for ${studentData.firstName} ${studentData.lastName} (${studentData.registrationNumber})`, authReq.userRole, authReq.userName);
-
-  res.status(201).json(studentData);
 });
 
 router.put("/api/students/:id", authMiddleware, requireRoles("registrar", "finance", "advisor", "exam_officer"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const index = db.students.findIndex(s => s.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Student not found" });
+  try {
+    const student = StudentService.updateStudent(
+      req.params.id, 
+      req.body, 
+      authReq.userRole || "unknown", 
+      authReq.userName || "unknown"
+    );
+    res.json(student);
+  } catch (error: any) {
+    res.status(error.message === "Student not found" ? 404 : 400).json({ error: error.message });
   }
-
-  // Mass assignment protection: filter allowed fields only
-  const ALLOWED_FIELDS: (keyof Student)[] = [
-    "firstName", "lastName", "email", "phone", "dateOfBirth", "gender", "nationality",
-    "program", "department", "cohortYear", "currentSemester", "academicStatus",
-    "financialHold", "academicHold", "gpa", "cgpa", "creditsEarned", "creditsRequired",
-    "advisorName", "advisorEmail", "avatarUrl", "guardianName", "guardianRelation",
-    "guardianPhone", "guardianEmail"
-  ];
-
-  const sanitizedUpdates: Partial<Student> = {};
-  for (const field of ALLOWED_FIELDS) {
-    if (req.body[field] !== undefined) {
-      (sanitizedUpdates as Record<string, unknown>)[field] = req.body[field];
-    }
-  }
-
-  db.students[index] = { ...db.students[index], ...sanitizedUpdates };
-  saveDB(db);
-
-  logServerAudit("Student Updated", `Student record updated for ${db.students[index].firstName} ${db.students[index].lastName}`, authReq.userRole, authReq.userName);
-
-  res.json(db.students[index]);
 });
 
 // Applications API

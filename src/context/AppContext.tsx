@@ -37,6 +37,10 @@ import {
   extractCareer,
   generateRegistrationNumber
 } from '../utils/studentIdGenerator';
+import { useAuthStore } from '../store/authStore';
+import { useUIStore } from '../store/uiStore';
+import { useSystemStore } from '../store/systemStore';
+import { useAcademicStore } from '../store/academicStore';
 
 interface AppContextType {
   // Navigation & Role State
@@ -148,26 +152,9 @@ const sanitizeStudentRecord = (s: Student): Student => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Active Portal & Role
-  const [currentPortal, setCurrentPortalState] = useState<'student' | 'staff'>('student');
-  const [activeRole, setActiveRoleState] = useState<UserRole>('student');
-  const [activeStudentId, setActiveStudentId] = useState<string>('std-101');
-
-  // Theme State
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    const savedTheme = localStorage.getItem('bmi_theme') as ThemeMode;
-    return savedTheme || 'emerald';
-  });
-
-  const setTheme = (newTheme: ThemeMode) => {
-    setThemeState(newTheme);
-    localStorage.setItem('bmi_theme', newTheme);
-    document.documentElement.dataset.theme = newTheme;
-  };
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  // Active Portal, Role & Theme (from Zustand)
+  const { currentPortal, setCurrentPortal, activeRole, setActiveRole, activeStudentId, setActiveStudentId } = useAuthStore();
+  const { theme, setTheme } = useUIStore();
 
   // Neon Database Strategy & R2 Backup State
   const [neonDatabases] = useState<NeonDatabaseContext[]>([
@@ -338,42 +325,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Authentication State
-
-  const [authToken, setAuthTokenState] = useState<string | null>(() => {
-    return sessionStorage.getItem('bmi_ums_auth_token');
-  });
-
-  const [authUser, setAuthUserState] = useState<{ name: string; role: UserRole } | null>(() => {
-    const saved = sessionStorage.getItem('bmi_ums_auth_user');
-    if (!saved) return null;
-    try {
-      return JSON.parse(saved);
-    } catch {
-      sessionStorage.removeItem('bmi_ums_auth_user');
-      return null;
-    }
-  });
-
-  const setAuthToken = (token: string | null) => {
-    setAuthTokenState(token);
-    if (token) {
-      sessionStorage.setItem('bmi_ums_auth_token', token);
-    } else {
-      sessionStorage.removeItem('bmi_ums_auth_token');
-    }
-  };
-
-  const setAuthUser = (user: { name: string; role: UserRole } | null) => {
-    setAuthUserState(user);
-    if (user) {
-      sessionStorage.setItem('bmi_ums_auth_user', JSON.stringify(user));
-    } else {
-      sessionStorage.removeItem('bmi_ums_auth_user');
-    }
-  };
+  const { authToken, setAuthToken, authUser, setAuthUser } = useAuthStore();
 
   const getAuthHeaders = (overrideToken?: string) => {
-    const token = overrideToken || authToken || sessionStorage.getItem('bmi_ums_auth_token');
+    const token = overrideToken || authToken;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
