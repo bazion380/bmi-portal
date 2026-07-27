@@ -39,6 +39,7 @@ export const StudentCourses: React.FC = () => {
     if (!msgSubject || !msgBody || !activeCourse) return;
 
     const newMsg = {
+      // eslint-disable-next-line react-hooks/purity
       id: `msg-${Date.now()}`,
       courseCode: activeCourse.code,
       instructor: activeCourse.instructorName,
@@ -60,6 +61,7 @@ export const StudentCourses: React.FC = () => {
     if (!submissionText || !activeCourse) return;
 
     const newSub = {
+      // eslint-disable-next-line react-hooks/purity
       id: `SUB-${Math.floor(100 + Math.random() * 900)}`,
       courseCode: activeCourse.code,
       title: `${activeCourse.code} Assignment Submission`,

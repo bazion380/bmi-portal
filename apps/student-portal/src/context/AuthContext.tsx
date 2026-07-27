@@ -21,8 +21,8 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('bmi_token'));
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('bmi_user');
-    return stored ? JSON.parse(stored) : null;
+    const s = localStorage.getItem('bmi_user');
+    return s ? JSON.parse(s) : null;
   });
 
   const login = (newToken: string, newUser: User) => {

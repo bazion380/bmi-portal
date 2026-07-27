@@ -33,7 +33,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     try {
       const body = await res.json();
       if (body?.error) message = body.error;
-    } catch (_) {}
+    } catch (_) { /* ignore */ }
     throw new ApiError(message, res.status);
   }
   return res.json() as Promise<T>;

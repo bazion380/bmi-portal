@@ -1,66 +1,19 @@
 /**
  * Shared API client for the Student Portal.
- * Reads the base URL from the Vite env variable VITE_API_URL.
+ * Attaches the stored JWT to every request automatically.
  */
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8787';
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('bmi_token');
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as any).error ?? 'API error');
-  }
-
-  return res.json();
-}
-
-// ── Typed API helpers ──────────────────────────────────────────────────────
-
-export const api = {
-  // Grades
-  getGrades: () => request<GradeEntry[]>('/api/v1/academics/grades'),
-
-  // Course offerings
-  getOfferings: (term?: string) =>
-    request<CourseOffering[]>(`/api/v1/academics/offerings${term ? `?term=${term}` : ''}`),
-
-  // Registration
-  registerCourse: (courseOfferingId: number) =>
-    request<{ id: number }>('/api/v1/academics/register', {
-      method: 'POST',
-      body: JSON.stringify({ courseOfferingId }),
-    }),
-
-  // Financial holds
-  getFinancialHolds: () => request<FinancialHold[]>('/api/v1/finance/holds'),
-
-  // Notifications
-  getNotifications: () => request<Notification[]>('/api/v1/notifications'),
-  markNotificationRead: (id: number) =>
-    request<{ success: boolean }>(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
-};
-
-// ── Shared Types ───────────────────────────────────────────────────────────
-
-export interface GradeEntry {
-  gradeId: number;
-  grade: string;
-  letterGrade: string;
+export interface Grade {
+  id: number;
+  grade: string | null;
+  letterGrade: string | null;
   gradedAt: string;
+  term: string;
   courseCode: string;
   courseTitle: string;
   credits: number;
-  term: string;
 }
 
 export interface CourseOffering {
@@ -74,6 +27,7 @@ export interface CourseOffering {
 
 export interface FinancialHold {
   id: number;
+  studentId: number;
   reason: string;
   amountDue: string;
   isActive: boolean;
@@ -82,7 +36,39 @@ export interface FinancialHold {
 
 export interface Notification {
   id: number;
+  userId: string;
   message: string;
   isRead: boolean;
   createdAt: string;
 }
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('bmi_token');
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as any).error ?? 'API error');
+  }
+  return res.json();
+}
+
+export const api = {
+  getGrades:       () => request<Grade[]>('/api/v1/academics/grades'),
+  getOfferings:    () => request<CourseOffering[]>('/api/v1/academics/offerings'),
+  registerCourse:  (courseOfferingId: number) =>
+    request<{ success: boolean }>('/api/v1/academics/register', {
+      method: 'POST',
+      body: JSON.stringify({ courseOfferingId }),
+    }),
+  getHolds:          () => request<FinancialHold[]>('/api/v1/finance/holds'),
+  getNotifications:  () => request<Notification[]>('/api/v1/notifications'),
+  markNotifRead:     (id: number) =>
+    request<{ success: boolean }>(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
+};

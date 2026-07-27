@@ -1,147 +1,69 @@
 import React, { useEffect, useState } from 'react';
-import { api, GradeEntry } from '../lib/api';
-
-// Compute GPA from grade entries
-function computeGPA(grades: GradeEntry[]): string {
-  const graded = grades.filter((g) => g.grade !== null);
-  if (!graded.length) return 'N/A';
-  const total = graded.reduce((sum, g) => {
-    const gp = parseFloat(g.grade ?? '0');
-    return sum + gp * g.credits;
-  }, 0);
-  const totalCredits = graded.reduce((sum, g) => sum + g.credits, 0);
-  return totalCredits ? (total / totalCredits).toFixed(2) : 'N/A';
-}
-
-const LETTER_COLOR: Record<string, string> = {
-  'A': 'badge-green', 'A+': 'badge-green', 'A-': 'badge-green',
-  'B': 'badge-blue', 'B+': 'badge-blue', 'B-': 'badge-blue',
-  'C': 'badge-yellow', 'C+': 'badge-yellow', 'C-': 'badge-yellow',
-  'D': 'badge-red', 'F': 'badge-red',
-};
+import { api, Grade } from '../lib/api';
 
 export const GradesView: React.FC = () => {
-  const [grades, setGrades] = useState<GradeEntry[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTerm, setActiveTerm] = useState<string>('All');
+  const [activeTerm, setActiveTerm] = useState<string>('all');
 
   useEffect(() => {
-    api.getGrades()
-      .then(setGrades)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    api.getGrades().then(setGrades).finally(() => setLoading(false));
   }, []);
 
-  const terms = ['All', ...Array.from(new Set(grades.map((g) => g.term)))];
-  const filtered = activeTerm === 'All' ? grades : grades.filter((g) => g.term === activeTerm);
-  const gpa = computeGPA(grades);
-  const totalCredits = grades.reduce((sum, g) => sum + g.credits, 0);
+  const terms = ['all', ...Array.from(new Set(grades.map((g) => g.term))).sort((a, b) => b.localeCompare(a))];
+  const filtered = activeTerm === 'all' ? grades : grades.filter((g) => g.term === activeTerm);
+  const gpa = filtered.length
+    ? (filtered.reduce((s, g) => s + (parseFloat(g.grade ?? '0') / 25), 0) / filtered.length).toFixed(2)
+    : 'N/A';
+  const totalCredits = filtered.reduce((s, g) => s + g.credits, 0);
+
+  const letterColor = (l: string | null) => {
+    if (!l) return 'badge-yellow';
+    if (l.startsWith('A')) return 'badge-green';
+    if (l === 'F') return 'badge-red';
+    if (l.startsWith('B')) return 'badge-blue';
+    return 'badge-yellow';
+  };
 
   return (
     <div>
       <div className="page-header fade-up">
-        <h1>Academic Transcript</h1>
-        <p>Your complete grade history across all enrolled terms.</p>
+        <h1>My Grades</h1>
+        <p>View your complete academic transcript and GPA.</p>
       </div>
-
-      {/* Summary Stats */}
       <div className="stat-grid fade-up fade-up-delay-1">
-        <div className="stat-card">
-          <div className="stat-icon indigo">📊</div>
-          <div className="stat-body">
-            <div className="stat-label">Cumulative GPA</div>
-            <div className="stat-value">{gpa}</div>
-            <div className="stat-sub">Out of 4.0</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon emerald">✅</div>
-          <div className="stat-body">
-            <div className="stat-label">Courses Completed</div>
-            <div className="stat-value">{grades.length}</div>
-            <div className="stat-sub">Total graded</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon amber">🎓</div>
-          <div className="stat-body">
-            <div className="stat-label">Credits Earned</div>
-            <div className="stat-value">{totalCredits}</div>
-            <div className="stat-sub">Across all terms</div>
-          </div>
-        </div>
+        <div className="stat-card"><div className="stat-icon indigo">📊</div><div className="stat-body"><div className="stat-label">GPA ({activeTerm === 'all' ? 'Cumulative' : activeTerm})</div><div className="stat-value">{loading ? '…' : gpa}</div></div></div>
+        <div className="stat-card"><div className="stat-icon green">📚</div><div className="stat-body"><div className="stat-label">Courses</div><div className="stat-value">{filtered.length}</div></div></div>
+        <div className="stat-card"><div className="stat-icon blue">🎓</div><div className="stat-body"><div className="stat-label">Credit Hours</div><div className="stat-value">{totalCredits}</div></div></div>
       </div>
-
-      {/* Term Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }} className="fade-up fade-up-delay-2">
-        {terms.map((term) => (
-          <button
-            key={term}
-            id={`term-tab-${term.replace(/\s+/g, '-')}`}
-            className={activeTerm === term ? 'btn btn-primary' : 'btn btn-ghost'}
-            onClick={() => setActiveTerm(term)}
-            style={{ padding: '6px 14px', fontSize: '0.8rem' }}
-          >
-            {term}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }} className="fade-up fade-up-delay-2">
+        {terms.map((t) => (
+          <button key={t} className={activeTerm === t ? 'btn btn-primary' : 'btn btn-ghost'}
+            onClick={() => setActiveTerm(t)}
+            style={{ padding: '6px 14px', fontSize: '0.8rem', textTransform: 'capitalize' }}>
+            {t === 'all' ? 'All Terms' : t}
           </button>
         ))}
       </div>
-
-      {/* Grades Table */}
       <div className="card fade-up fade-up-delay-3">
-        <div className="card-header">
-          <div>
-            <div className="card-title">Grade Records</div>
-            <div className="card-subtitle">{filtered.length} course(s) shown</div>
-          </div>
-        </div>
-
-        {loading && <div className="empty-state"><p>Loading grades…</p></div>}
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
-
-        {!loading && !error && filtered.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-icon">📭</div>
-            <p>No grade records found for this term.</p>
-          </div>
-        )}
-
-        {!loading && !error && filtered.length > 0 && (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Course Code</th>
-                  <th>Course Title</th>
-                  <th>Credits</th>
-                  <th>Term</th>
-                  <th>Grade</th>
-                  <th>Letter</th>
-                  <th>Date Graded</th>
+        {loading ? <div className="empty-state"><p>Loading…</p></div> : filtered.length === 0 ? (
+          <div className="empty-state"><div className="empty-icon">📊</div><p>No grades for this term.</p></div>
+        ) : (
+          <div className="table-wrapper"><table>
+            <thead><tr><th>Code</th><th>Course</th><th>Credits</th><th>Score</th><th>Grade</th><th>Term</th></tr></thead>
+            <tbody>
+              {filtered.map((g) => (
+                <tr key={g.id}>
+                  <td><strong>{g.courseCode}</strong></td>
+                  <td>{g.courseTitle}</td>
+                  <td>{g.credits}</td>
+                  <td>{g.grade ?? '—'}</td>
+                  <td><span className={`badge ${letterColor(g.letterGrade)}`}>{g.letterGrade ?? '—'}</span></td>
+                  <td>{g.term}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((g) => (
-                  <tr key={g.gradeId}>
-                    <td><strong>{g.courseCode}</strong></td>
-                    <td>{g.courseTitle}</td>
-                    <td>{g.credits}</td>
-                    <td>{g.term}</td>
-                    <td>{g.grade ?? '—'}</td>
-                    <td>
-                      {g.letterGrade ? (
-                        <span className={`badge ${LETTER_COLOR[g.letterGrade] ?? 'badge-yellow'}`}>
-                          {g.letterGrade}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td>{new Date(g.gradedAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table></div>
         )}
       </div>
     </div>

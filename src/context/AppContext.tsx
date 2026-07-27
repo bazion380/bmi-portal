@@ -675,9 +675,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addExecutiveProposal = (titleOrObj: string | { title: string; dept: string; priority: 'High' | 'Medium' | 'Low' }, dept?: string, priority?: 'High' | 'Medium' | 'Low') => {
-    let titleStr = '';
     let deptStr = dept || 'Executive';
     let prioStr: 'High' | 'Medium' | 'Low' = priority || 'Medium';
+    let titleStr: string;
 
     if (typeof titleOrObj === 'string') {
       titleStr = titleOrObj;
