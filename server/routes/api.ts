@@ -57,7 +57,11 @@ router.post("/api/auth/login", (req, res) => {
 });
 
 import { StudentService } from "../services/studentService.js";
-
+import { ApplicationService } from "../services/applicationService.js";
+import { CourseService } from "../services/courseService.js";
+import { InvoiceService } from "../services/invoiceService.js";
+import { StaffService } from "../services/staffService.js";
+import { prisma } from "../data/prisma.js";
 // Students API
 router.get("/api/students", authMiddleware, async (req, res) => {
   try {
@@ -110,43 +114,18 @@ router.put("/api/students/:id", authMiddleware, requireRoles("registrar", "finan
 });
 
 // Applications API
-router.get("/api/applications", authMiddleware, (req, res) => {
-  res.json(db.applications);
+router.get("/api/applications", authMiddleware, async (req, res) => {
+  const apps = await ApplicationService.getAllApplications();
+  res.json(apps);
 });
 
-router.post("/api/applications", authMiddleware, (req, res) => {
-  const randomNum = crypto.randomInt(100, 999);
-  const newApp: Application = {
-    id: `app-${Date.now()}`,
-    applicationNumber: `ADM-2026-${randomNum}`,
-    applicantName: req.body.applicantName,
-    email: req.body.email,
-    phone: req.body.phone || "+1 (555) 019-2831",
-    programApplied: req.body.programApplied || "B.Sc. Computer Science",
-    career: (req.body.career as AcademicCareer) || "UG",
-    department: req.body.department || "School of Computing & Engineering",
-    appliedDate: new Date().toISOString().split("T")[0],
-    status: "Under Review",
-    highSchoolGPA: req.body.highSchoolGPA || 3.85,
-    documents: [
-      { name: "High School Transcript.pdf", status: "Verified" },
-      { name: "ID Passport Copy.pdf", status: "Verified" }
-    ],
-    assignedUid: generateStudentUid(db.students.length + 105),
-    assignedRegNo: generateRegistrationNumber({
-      career: (req.body.career as AcademicCareer) || "UG",
-      programCode: "CS",
-      year: 2026,
-      serial: db.students.length + 1
-    })
-  };
-
-  db.applications.unshift(newApp);
-  saveDB(db);
-
-  logServerAudit("Application Submitted", `New application submitted by ${newApp.applicantName} (${newApp.applicationNumber})`, "Public", "Applicant");
-
-  res.status(201).json(newApp);
+router.post("/api/applications", authMiddleware, async (req, res) => {
+  try {
+    const newApp = await ApplicationService.createApplication(req.body);
+    res.status(201).json(newApp);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Helper for admissions conversion
@@ -202,139 +181,168 @@ function buildEnrolledStudent(appRecord: Application, initialGpa: number = 0.0):
 }
 
 // Admissions Conversion Route
-router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admissions", "registrar"), (req, res) => {
+router.post("/api/applications/:id/convert", authMiddleware, requireRoles("admissions", "registrar"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const appIndex = db.applications.findIndex(a => a.id === req.params.id);
-  if (appIndex === -1) {
-    return res.status(404).json({ error: "Application not found" });
+  try {
+    const appRecord = await prisma.application.findUnique({ where: { id: req.params.id } });
+    if (!appRecord) return res.status(404).json({ error: "Application not found" });
+
+    const newStudent = await StudentService.createStudent({
+      studentUid: generateStudentUid(crypto.randomInt(100, 999)),
+      registrationNumber: generateRegistrationNumber({ career: "UG", programCode: "CS", year: 2026, serial: crypto.randomInt(100, 999) }),
+      studentNumber: `STU-${crypto.randomInt(1000, 9999)}`,
+      firstName: appRecord.applicantName.split(" ")[0] || "Applicant",
+      lastName: appRecord.applicantName.split(" ").slice(1).join(" ") || "Student",
+      email: appRecord.email,
+      phone: appRecord.phone,
+      dateOfBirth: "2005-06-15",
+      nationalId: `NAT-${crypto.randomInt(100000, 999999)}`,
+      gender: "Female",
+      nationality: "United States",
+      program: appRecord.programApplied,
+      department: appRecord.department,
+      cohortYear: 2026
+    }, authReq.userRole || "unknown", authReq.userName || "unknown");
+
+    const updatedApp = await prisma.application.update({
+      where: { id: appRecord.id },
+      data: { status: "Enrolled", assignedUid: newStudent.studentUid, assignedRegNo: newStudent.registrationNumber }
+    });
+
+    logServerAudit("Admissions Conversion", `Converted application ${appRecord.applicationNumber} to Student Record ${newStudent.registrationNumber} (UID: ${newStudent.studentUid})`, authReq.userRole, authReq.userName);
+
+    res.json({ student: newStudent, application: updatedApp });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
-
-  const appRecord = db.applications[appIndex];
-  const newStudent = buildEnrolledStudent(appRecord, 0.0);
-
-  db.students.push(newStudent);
-  db.applications[appIndex].status = "Enrolled";
-  saveDB(db);
-
-  logServerAudit("Admissions Conversion", `Converted application ${appRecord.applicationNumber} to Student Record ${newStudent.registrationNumber} (UID: ${newStudent.studentUid})`, authReq.userRole, authReq.userName);
-
-  res.json({ student: newStudent, application: db.applications[appIndex] });
 });
 
 // Automated Admissions Pipeline Route
-router.post("/api/applications/:id/pipeline", authMiddleware, requireRoles("admissions", "registrar"), (req, res) => {
+router.post("/api/applications/:id/pipeline", authMiddleware, requireRoles("admissions", "registrar"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const appIndex = db.applications.findIndex(a => a.id === req.params.id);
-  if (appIndex === -1) {
-    return res.status(404).json({ error: "Application not found" });
+  try {
+    const appRecord = await prisma.application.findUnique({ where: { id: req.params.id } });
+    if (!appRecord) return res.status(404).json({ error: "Application not found" });
+
+    const newStudent = await StudentService.createStudent({
+      studentUid: generateStudentUid(crypto.randomInt(100, 999)),
+      registrationNumber: generateRegistrationNumber({ career: "UG", programCode: "CS", year: 2026, serial: crypto.randomInt(100, 999) }),
+      studentNumber: `STU-${crypto.randomInt(1000, 9999)}`,
+      firstName: appRecord.applicantName.split(" ")[0] || "Applicant",
+      lastName: appRecord.applicantName.split(" ").slice(1).join(" ") || "Student",
+      email: appRecord.email,
+      phone: appRecord.phone,
+      dateOfBirth: "2005-06-15",
+      nationalId: `NAT-${crypto.randomInt(100000, 999999)}`,
+      gender: "Female",
+      nationality: "United States",
+      program: appRecord.programApplied,
+      department: appRecord.department,
+      cohortYear: 2026
+    }, authReq.userRole || "unknown", authReq.userName || "unknown");
+
+    const updatedApp = await prisma.application.update({
+      where: { id: appRecord.id },
+      data: { status: "Enrolled", assignedUid: newStudent.studentUid, assignedRegNo: newStudent.registrationNumber }
+    });
+
+    const invoice = await InvoiceService.createInvoice({
+      studentId: newStudent.id,
+      totalAmount: 3800,
+      amountPaid: 3800,
+      dueDate: "2026-09-15",
+      status: "Paid"
+    }, authReq.userRole || "unknown", authReq.userName || "unknown");
+
+    logServerAudit("Automated Pipeline Execution", `100% Automated Pipeline executed for ${newStudent.firstName} ${newStudent.lastName}. Enrolled with RegNo ${newStudent.registrationNumber} and Invoice settled.`, authReq.userRole, authReq.userName);
+
+    res.json({
+      student: newStudent,
+      application: updatedApp,
+      invoice,
+      autoEnrolledCoursesCount: 4
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
-
-  const appRecord = db.applications[appIndex];
-  const newStudent = buildEnrolledStudent(appRecord, 3.90);
-
-  db.students.push(newStudent);
-  db.applications[appIndex].status = "Enrolled";
-
-  // Auto create settled fee invoice
-  const invRandom = crypto.randomInt(100, 999);
-  const invoice: FeeInvoice = {
-    id: `inv-${Date.now()}`,
-    invoiceNumber: `INV-2026-${invRandom}`,
-    studentId: newStudent.id,
-    term: "Fall 2026",
-    dueDate: "2026-09-15",
-    issueDate: new Date().toISOString().split("T")[0],
-    items: [
-      { description: "Tuition Fee (Fall 2026)", amount: 3200 },
-      { description: "Technology & Lab Access Fee", amount: 400 },
-      { description: "Registration & Matriculation Fee", amount: 200 }
-    ],
-    totalAmount: 3800,
-    amountPaid: 3800,
-    status: "Paid",
-    scholarshipDiscount: 0
-  };
-  db.invoices.unshift(invoice);
-  saveDB(db);
-
-  logServerAudit("Automated Pipeline Execution", `100% Automated Pipeline executed for ${newStudent.firstName} ${newStudent.lastName}. Enrolled with RegNo ${newStudent.registrationNumber} and Invoice settled.`, authReq.userRole, authReq.userName);
-
-  res.json({
-    student: newStudent,
-    application: db.applications[appIndex],
-    invoice,
-    autoEnrolledCoursesCount: 4
-  });
 });
 
 // Courses API
-router.get("/api/courses", authMiddleware, (req, res) => {
-  res.json(db.courses);
+router.get("/api/courses", authMiddleware, async (req, res) => {
+  const courses = await CourseService.getAllCourses();
+  res.json(courses);
 });
 
-router.post("/api/courses", authMiddleware, requireRoles("registrar", "lecturer"), (req, res) => {
+router.post("/api/courses", authMiddleware, requireRoles("registrar", "lecturer"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const course = { id: `crs-${Date.now()}`, ...req.body };
-  db.courses.push(course);
-  saveDB(db);
-  logServerAudit("Course Created", `New course created: ${course.code} - ${course.title}`, authReq.userRole, authReq.userName);
-  res.status(201).json(course);
-});
-
-router.put("/api/courses/:id", authMiddleware, requireRoles("registrar", "lecturer"), (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const index = db.courses.findIndex(c => c.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Course not found" });
+  try {
+    const course = await CourseService.createCourse(req.body, authReq.userRole || "unknown", authReq.userName || "unknown");
+    res.status(201).json(course);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
-  db.courses[index] = { ...db.courses[index], ...req.body };
-  saveDB(db);
-  logServerAudit("Course Updated", `Course updated: ${db.courses[index].code}`, authReq.userRole, authReq.userName);
-  res.json(db.courses[index]);
+});
+
+router.put("/api/courses/:id", authMiddleware, requireRoles("registrar", "lecturer"), async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const course = await CourseService.updateCourse(req.params.id, req.body, authReq.userRole || "unknown", authReq.userName || "unknown");
+    res.json(course);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Invoices API
-router.get("/api/invoices", authMiddleware, (req, res) => {
-  res.json(db.invoices);
+router.get("/api/invoices", authMiddleware, async (req, res) => {
+  const invoices = await InvoiceService.getAllInvoices();
+  res.json(invoices);
 });
 
-router.post("/api/invoices", authMiddleware, requireRoles("finance"), (req, res) => {
+router.post("/api/invoices", authMiddleware, requireRoles("finance"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const invoice = { id: `inv-${Date.now()}`, ...req.body };
-  db.invoices.unshift(invoice);
-  saveDB(db);
-  logServerAudit("Invoice Issued", `New invoice issued: #${invoice.invoiceNumber || invoice.id}`, authReq.userRole, authReq.userName);
-  res.status(201).json(invoice);
-});
-
-router.put("/api/invoices/:id", authMiddleware, requireRoles("finance", "registrar"), (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  const index = db.invoices.findIndex(i => i.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Invoice not found" });
+  try {
+    const invoice = await InvoiceService.createInvoice(req.body, authReq.userRole || "unknown", authReq.userName || "unknown");
+    res.status(201).json(invoice);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
-  db.invoices[index] = { ...db.invoices[index], ...req.body };
-  saveDB(db);
-  logServerAudit("Invoice Updated", `Payment / Status update on Invoice #${db.invoices[index].invoiceNumber || req.params.id}`, authReq.userRole, authReq.userName);
-  res.json(db.invoices[index]);
+});
+
+router.put("/api/invoices/:id", authMiddleware, requireRoles("finance", "registrar"), async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    if (req.body.amountPaid) {
+      const invoice = await InvoiceService.processPayment(req.params.id, req.body.amountPaid, authReq.userRole || "unknown", authReq.userName || "unknown");
+      res.json(invoice);
+    } else {
+      const invoice = await prisma.feeInvoice.update({ where: { id: req.params.id }, data: req.body });
+      res.json(invoice);
+    }
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Update Application
-router.put("/api/applications/:id", authMiddleware, requireRoles("admissions", "registrar"), (req, res) => {
+router.put("/api/applications/:id", authMiddleware, requireRoles("admissions", "registrar"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const index = db.applications.findIndex(a => a.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Application not found" });
+  try {
+    const app = await prisma.application.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    logServerAudit("Application Updated", `Application #${app.applicationNumber} updated to status '${app.status}'`, authReq.userRole, authReq.userName);
+    res.json(app);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
-  db.applications[index] = { ...db.applications[index], ...req.body };
-  saveDB(db);
-  logServerAudit("Application Updated", `Application #${db.applications[index].applicationNumber} updated to status '${db.applications[index].status}'`, authReq.userRole, authReq.userName);
-  res.json(db.applications[index]);
 });
 
 // Staff API
-router.get("/api/staff", authMiddleware, (req, res) => {
-  res.json(db.staff);
+router.get("/api/staff", authMiddleware, async (req, res) => {
+  const staff = await StaffService.getAllStaff();
+  res.json(staff);
 });
 
 // Books & Loans API
@@ -347,8 +355,9 @@ router.get("/api/loans", authMiddleware, (req, res) => {
 });
 
 // Audit Logs API
-router.get("/api/audit-logs", authMiddleware, requireRoles("it_admin", "president"), (req, res) => {
-  res.json(db.auditLogs);
+router.get("/api/audit-logs", authMiddleware, requireRoles("it_admin", "president"), async (req, res) => {
+  const logs = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
+  res.json(logs);
 });
 
 router.post("/api/audit-logs", authMiddleware, (req, res) => {
