@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useStudents } from '../../hooks/api';
 import { UserRole, ThemeMode } from '../../types';
 import { BmiLogo } from './BmiLogo';
 import { 
@@ -24,18 +26,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, onOpenLogin }) => {
+  const { currentPortal, setCurrentPortal, activeRole, setActiveRole, activeStudentId, setActiveStudentId, authToken, authUser } = useAuthStore();
+  const { data: students = [] } = useStudents();
   const { 
-    currentPortal, 
-    setCurrentPortal, 
-    activeRole, 
-    setActiveRole, 
-    students, 
-    activeStudentId, 
-    setActiveStudentId,
     auditLogs,
     resetDemoData,
-    authToken,
-    authUser,
     theme,
     setTheme
   } = useApp();

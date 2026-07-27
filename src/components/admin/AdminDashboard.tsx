@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from '../../context/AppContext';
+import { useAuthStore } from '../../store/useAuthStore';
 import { UserRole } from '../../types';
 import { PresidentView } from './PresidentView';
 import { RegistrarView } from './RegistrarView';
@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const { activeRole, setActiveRole } = useApp();
+  const { activeRole, setActiveRole } = useAuthStore();
 
   const roleNavItems: { role: UserRole; label: string; icon: any; category: string }[] = [
     { role: 'president', label: 'President / VC', icon: Building2, category: 'Executive' },

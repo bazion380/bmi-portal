@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useCourses, useStudents } from '../../hooks/api';
 import { 
   Users, 
   BookOpen, 
@@ -15,7 +16,9 @@ import {
 } from 'lucide-react';
 
 export const LecturerView: React.FC = () => {
-  const { courses, students, enrollments, updateStudentGrade, recordAttendance, logAudit } = useApp();
+  const { data: courses = [] } = useCourses();
+  const { data: students = [] } = useStudents();
+  const { enrollments, updateStudentGrade, recordAttendance, logAudit } = useApp();
   
   const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
   const activeCourse = courses.find(c => c.id === selectedCourseId) || courses[0];

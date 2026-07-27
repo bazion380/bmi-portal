@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuditLogs, useStudents, useCourses } from '../../hooks/api';
 import { 
   Server, 
   Database, 
@@ -23,16 +24,16 @@ import {
 } from 'lucide-react';
 
 export const AdminITView: React.FC = () => {
+  const { data: auditLogs = [] } = useAuditLogs();
+  const { data: students = [] } = useStudents();
+  const { data: courses = [] } = useCourses();
   const { 
-    auditLogs, 
     resetDemoData, 
     neonDatabases, 
     dbBackups, 
     rlsPolicies, 
     triggerBackup, 
-    getSignedR2Url,
-    students,
-    courses
+    getSignedR2Url
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'neon_db' | 'auth_rls' | 'r2_storage' | 'backups' | 'hold_verifier'>('neon_db');

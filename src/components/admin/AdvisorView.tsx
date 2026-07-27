@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStudents } from '../../hooks/api';
 import { AlertCircle, UserCheck, Plus, FileText, CheckCircle2 } from 'lucide-react';
 
 export const AdvisorView: React.FC = () => {
-  const { students, advisingNotes, addAdvisingNote, resolveAdvisingNote } = useApp();
+  const { data: students = [] } = useStudents();
+  const { advisingNotes, addAdvisingNote, resolveAdvisingNote } = useApp();
 
   const [studentId, setStudentId] = useState(students[0]?.id || '');
   const [topic, setTopic] = useState('');

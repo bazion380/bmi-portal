@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useInvoices, useStudents } from '../../hooks/api';
 import { 
   CreditCard, 
   DollarSign, 
@@ -15,7 +16,9 @@ import {
 import { FeeInvoice } from '../../types';
 
 export const FinanceView: React.FC = () => {
-  const { invoices, students, toggleStudentHold, processInvoicePayment, createInvoice, applyScholarshipToInvoice } = useApp();
+  const { data: invoices = [] } = useInvoices();
+  const { data: students = [] } = useStudents();
+  const { toggleStudentHold, processInvoicePayment, createInvoice, applyScholarshipToInvoice } = useApp();
 
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');

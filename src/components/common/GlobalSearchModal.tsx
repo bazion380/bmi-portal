@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useStudents, useCourses, useApplications, useBooks } from '../../hooks/api';
 import { Search, X, User, BookOpen, FileCheck, Book } from 'lucide-react';
 
 interface GlobalSearchModalProps {
@@ -8,7 +9,11 @@ interface GlobalSearchModalProps {
 }
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }) => {
-  const { students, courses, applications, libraryBooks, setActiveStudentId, setCurrentPortal, setActiveRole } = useApp();
+  const { setActiveStudentId, setCurrentPortal, setActiveRole } = useAuthStore();
+  const { data: students = [] } = useStudents();
+  const { data: courses = [] } = useCourses();
+  const { data: applications = [] } = useApplications();
+  const { data: libraryBooks = [] } = useBooks();
   const [query, setQuery] = useState('');
 
   if (!isOpen) return null;

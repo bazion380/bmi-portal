@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useStaff } from '../../hooks/api';
 import { Users, Briefcase, CheckCircle2, Plus, X, Edit2 } from 'lucide-react';
 import { StaffRecord } from '../../types';
 
 export const HRView: React.FC = () => {
-  const { staffList, addStaffRecord, updateStaffRecord } = useApp();
+  const { data: staffList = [] } = useStaff();
+  const { addStaffRecord, updateStaffRecord } = useApp();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffRecord | null>(null);
