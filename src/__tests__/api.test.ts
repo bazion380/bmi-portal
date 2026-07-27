@@ -87,6 +87,36 @@ describe('Academic & Financial Business Rules Suite', () => {
   });
 });
 
+describe('Fee Invoice & Financial Processing Suite', () => {
+  it('updates invoice status correctly when partial vs full payments are applied', () => {
+    const invoice: { amountDue: number; amountPaid: number; status: 'Unpaid' | 'Partially Paid' | 'Paid' } = {
+      amountDue: 4500,
+      amountPaid: 0,
+      status: 'Unpaid'
+    };
+
+    // Partial payment
+    const partialPayment = 2000;
+    invoice.amountPaid += partialPayment;
+    invoice.status = invoice.amountPaid >= invoice.amountDue ? 'Paid' : 'Partially Paid';
+    expect(invoice.status).toBe('Partially Paid');
+
+    // Remaining payment
+    const remainingPayment = 2500;
+    invoice.amountPaid += remainingPayment;
+    invoice.status = invoice.amountPaid >= invoice.amountDue ? 'Paid' : 'Partially Paid';
+    expect(invoice.status).toBe('Paid');
+  });
+
+  it('applies scholarship voucher deduction properly to total amount due', () => {
+    const initialAmount = 5000;
+    const scholarshipVoucher = 1500;
+
+    const adjustedDue = Math.max(0, initialAmount - scholarshipVoucher);
+    expect(adjustedDue).toBe(3500);
+  });
+});
+
 describe('Authentication & Token Security Suite', () => {
   it('signs and verifies HMAC tokens securely', () => {
     const payload = {

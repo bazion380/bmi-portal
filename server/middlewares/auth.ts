@@ -2,15 +2,22 @@ import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { UserRole } from "../../src/types/index.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "bmi_ums_secure_token_secret_2026";
+// Ensure a cryptographically secure random secret is generated per runtime instance if process.env.JWT_SECRET is missing
+const JWT_SECRET: string = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production.");
+  }
+  return crypto.randomBytes(32).toString("hex");
+})();
 
-// Get configured system passcode or secure defaults
+// Get configured system passcode
 export function getValidPasscodes(): string[] {
   const envPass = process.env.UMS_PASSCODE;
   if (envPass) {
-    return [envPass];
+    return [envPass.trim()];
   }
-  return ["123456", "bmi2026", "admin123"];
+  // Default development passcode if UMS_PASSCODE is not set
+  return ["123456"];
 }
 
 export interface AuthenticatedRequest extends Request {

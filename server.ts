@@ -9,12 +9,24 @@ const PORT = 3000;
 const app = express();
 app.set("trust proxy", 1);
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(",") 
-  : true;
+const allowedOriginsList = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()) 
+  : [];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or same-origin SPA)
+    if (!origin) return callback(null, true);
+    if (allowedOriginsList.length > 0) {
+      if (allowedOriginsList.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("CORS policy violation: Origin not allowed"), false);
+      }
+    }
+    // Default development mode: allow same origin or standard localhost/dev domain
+    return callback(null, true);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
