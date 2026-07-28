@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // -------------------------------------------------------------
@@ -80,7 +79,15 @@ model Student {
   academicHold       Boolean  @default(false)
   advisorName        String?
   advisorEmail       String?
-  
+  // Guardian Details
+  guardianName       String?
+  guardianRelation   String?
+  guardianPhone      String?
+  guardianEmail      String?
+
+  // Profile
+  avatarUrl          String?
+
   // Relations
   invoices           FeeInvoice[]
   enrollments        Enrollment[]

@@ -83,6 +83,7 @@ interface AppContextType {
   addApplication: (appData: Omit<Application, 'id' | 'applicationNumber' | 'appliedDate' | 'status' | 'documents'>) => void;
   updateApplicationStatus: (appId: string, status: Application['status'], notes?: string) => void;
   updateApplicationDocumentStatus: (appId: string, docIndex: number, status: 'Pending' | 'Verified' | 'Rejected') => void;
+  addStudent: (studentData: Omit<Student, 'id' | 'internalSeq' | 'studentUid' | 'registrationNumber' | 'studentNumber'>) => Promise<Student>;
   addCourse: (courseData: Omit<Course, 'id' | 'enrolledCount'>) => void;
   updateCourse: (courseId: string, data: Partial<Course>) => void;
   deleteCourse: (courseId: string) => void;
@@ -119,33 +120,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEY_PREFIX = 'bmi_ums_v4_';
 
-const sanitizeStudentRecord = (s: Student): Student => {
-  let regNo = s.registrationNumber || s.studentNumber;
-  let uid = s.studentUid;
-
-  if (s.id === 'std-101') {
-    uid = uid || 'BMI00002T';
-    regNo = 'BMI/UG-CS/224/001';
-  } else if (s.id === 'std-102') {
-    uid = uid || 'BMI00002U';
-    regNo = 'BMI/UG-DS/224/001';
-  } else if (s.id === 'std-103') {
-    uid = uid || 'BMI00002V';
-    regNo = 'BMI/UG-BBA/223/001';
-  } else if (s.id === 'std-104') {
-    uid = uid || 'BMI00002W';
-    regNo = 'BMI/UG-ENG/223/001';
-  } else if (!regNo || regNo.startsWith('BMI-202')) {
-    regNo = `BMI/UG-CS/226/${(s.id || '').replace('std-', '').padStart(3, '0')}`;
-  }
-
-  return {
-    ...s,
-    studentUid: uid || 'BMI00002T',
-    registrationNumber: regNo,
-    studentNumber: regNo
-  };
-};
+// No sanitization needed — data comes directly from the real Neon database
+const sanitizeStudentRecord = (s: Student): Student => s;
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Active Portal & Role
@@ -377,69 +353,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return headers;
   };
 
-  // Load or Initialize State
-  const [students, setStudents] = useState<Student[]>(() => {
-    // Clear legacy v1/v2 storage keys if present
-    try {
-      localStorage.removeItem('bmi_ums_v1_students');
-      localStorage.removeItem('bmi_ums_v2_students');
-      localStorage.removeItem('bmi_ums_v3_students');
-    } catch (_) {}
+  // ---- Live DB State — all data is loaded from Neon Postgres via /api/* ----
+  // Clear any stale mock data that may have been cached in localStorage
+  try {
+    const staleKeys = ['students','applications','courses','enrollments','invoices','staff','audit','books','loans','advising','alumni'];
+    staleKeys.forEach(k => localStorage.removeItem(STORAGE_KEY_PREFIX + k));
+    // Also clear legacy versioned keys
+    ['v1','v2','v3'].forEach(v => localStorage.removeItem(`bmi_ums_${v}_students`));
+  } catch (_) {}
 
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'students');
-    const rawList: Student[] = saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-    return rawList.map(sanitizeStudentRecord);
-  });
-
-  const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'applications');
-    return saved ? JSON.parse(saved) : INITIAL_APPLICATIONS;
-  });
-
-  const [courses, setCourses] = useState<Course[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'courses');
-    return saved ? JSON.parse(saved) : INITIAL_COURSES;
-  });
-
-  const [enrollments, setEnrollments] = useState<StudentCourseEnrollment[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'enrollments');
-    return saved ? JSON.parse(saved) : INITIAL_ENROLLMENTS;
-  });
-
-  const [invoices, setInvoices] = useState<FeeInvoice[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'invoices');
-    return saved ? JSON.parse(saved) : INITIAL_INVOICES;
-  });
-
-  const [staffList, setStaffList] = useState<StaffRecord[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'staff');
-    return saved ? JSON.parse(saved) : INITIAL_STAFF;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'audit');
-    return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
-  });
-
-  const [libraryBooks, setLibraryBooks] = useState<LibraryBook[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'books');
-    return saved ? JSON.parse(saved) : INITIAL_BOOKS;
-  });
-
-  const [libraryLoans, setLibraryLoans] = useState<LibraryLoan[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'loans');
-    return saved ? JSON.parse(saved) : INITIAL_LOANS;
-  });
-
-  const [advisingNotes, setAdvisingNotes] = useState<AdvisingNote[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'advising');
-    return saved ? JSON.parse(saved) : INITIAL_ADVISING_NOTES;
-  });
-
-  const [alumniList, setAlumniList] = useState<AlumniRecord[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'alumni');
-    return saved ? JSON.parse(saved) : INITIAL_ALUMNI;
-  });
+  const [students, setStudents] = useState<Student[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrollments, setEnrollments] = useState<StudentCourseEnrollment[]>([]);
+  const [invoices, setInvoices] = useState<FeeInvoice[]>([]);
+  const [staffList, setStaffList] = useState<StaffRecord[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [libraryBooks, setLibraryBooks] = useState<LibraryBook[]>([]);
+  const [libraryLoans, setLibraryLoans] = useState<LibraryLoan[]>([]);
+  const [advisingNotes, setAdvisingNotes] = useState<AdvisingNote[]>([]);
+  const [alumniList, setAlumniList] = useState<AlumniRecord[]>([]);
 
   const [executiveApprovals, setExecutiveApprovals] = useState<{ id: number; title: string; dept: string; priority: 'High' | 'Medium' | 'Low'; signed: boolean; signedDate?: string; signerName?: string }[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'executive');
@@ -460,74 +393,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  // Sync to local storage
+  // ---- Live API sync — fetches all data from Neon Postgres via /api/* ----
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'students', JSON.stringify(students));
-  }, [students]);
-
-  // Initial backend API synchronization
-  useEffect(() => {
-    async function syncWithServerAPI() {
+    async function loadFromAPI() {
+      if (!authToken) return;
       try {
         const headers = getAuthHeaders();
-        const [stdRes, appRes, logRes, crsRes, invRes] = await Promise.all([
-          fetch('/api/students', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/applications', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/audit-logs', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/courses', { headers }).then(r => r.ok ? r.json() : null),
-          fetch('/api/invoices', { headers }).then(r => r.ok ? r.json() : null),
+        const [stdRes, appRes, crsRes, invRes, staffRes, logRes] = await Promise.all([
+          fetch('/api/students', { headers }),
+          fetch('/api/applications', { headers }),
+          fetch('/api/courses', { headers }),
+          fetch('/api/invoices', { headers }),
+          fetch('/api/staff', { headers }),
+          fetch('/api/audit-logs', { headers }),
         ]);
 
-        if (stdRes && Array.isArray(stdRes) && stdRes.length > 0) {
-          setStudents(stdRes.map(sanitizeStudentRecord));
+        const responses = [stdRes, appRes, crsRes, invRes, staffRes, logRes];
+        if (responses.some(r => r.status === 401)) {
+          setAuthToken(null);
+          return;
         }
-        if (appRes && Array.isArray(appRes) && appRes.length > 0) {
-          setApplications(appRes);
-        }
-        if (logRes && Array.isArray(logRes) && logRes.length > 0) {
-          setAuditLogs(logRes);
-        }
-        if (crsRes && Array.isArray(crsRes) && crsRes.length > 0) {
-          setCourses(crsRes);
-        }
-        if (invRes && Array.isArray(invRes) && invRes.length > 0) {
-          setInvoices(invRes);
-        }
+
+        const [stdData, appData, crsData, invData, staffData, logData] = await Promise.all(
+          responses.map(r => r.ok ? r.json() : [])
+        );
+
+        if (Array.isArray(stdData)) setStudents(stdData);
+        if (Array.isArray(appData)) setApplications(appData);
+        if (Array.isArray(crsData)) setCourses(crsData);
+        if (Array.isArray(invData)) setInvoices(invData);
+        if (Array.isArray(staffData)) setStaffList(staffData);
+        if (Array.isArray(logData)) setAuditLogs(logData);
       } catch (err) {
-        console.warn('Backend API server not reached, using persistent cached state:', err);
+        console.warn('[AppContext] API unreachable — working with empty state:', err);
       }
     }
-    syncWithServerAPI();
+    loadFromAPI();
   }, [authToken]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'applications', JSON.stringify(applications));
-  }, [applications]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'courses', JSON.stringify(courses));
-  }, [courses]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'enrollments', JSON.stringify(enrollments));
-  }, [enrollments]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'invoices', JSON.stringify(invoices));
-  }, [invoices]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'staff', JSON.stringify(staffList));
-  }, [staffList]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'books', JSON.stringify(libraryBooks));
-  }, [libraryBooks]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'loans', JSON.stringify(libraryLoans));
-  }, [libraryLoans]);
-
+  // UI-only settings persisted in localStorage (no DB needed for these)
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'executive', JSON.stringify(executiveApprovals));
   }, [executiveApprovals]);
@@ -535,18 +439,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'sysflags', JSON.stringify(systemFlags));
   }, [systemFlags]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'audit', JSON.stringify(auditLogs));
-  }, [auditLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'advising', JSON.stringify(advisingNotes));
-  }, [advisingNotes]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'alumni', JSON.stringify(alumniList));
-  }, [alumniList]);
 
   const setCurrentPortal = (portal: 'student' | 'staff') => {
     setCurrentPortalState(portal);
@@ -1059,6 +951,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logAudit('Course Curriculum Creation', `Created new course ${newCourse.code} (${newCourse.title}) in ${newCourse.department}.`);
   };
 
+  // Direct student creation by Registrar (bypasses admissions pipeline)
+  const addStudent = async (studentData: Omit<Student, 'id' | 'internalSeq' | 'studentUid' | 'registrationNumber' | 'studentNumber'>): Promise<Student> => {
+    const res = await fetch('/api/students', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(studentData),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(err.error ?? `Server error ${res.status}`);
+    }
+    const created: Student = await res.json();
+    setStudents(prev => [created, ...prev]);
+    logAudit(
+      'Direct Student Registration',
+      `Registrar created student record for ${created.firstName} ${created.lastName} (${created.registrationNumber}) — UID: ${created.studentUid}`
+    );
+    return created;
+  };
+
   // 9. Add Advising Note
   const addAdvisingNote = (note: Omit<AdvisingNote, 'id' | 'date'>) => {
     const newNote: AdvisingNote = {
@@ -1300,20 +1212,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const resetDemoData = () => {
+  const resetDemoData = async () => {
+    // Clear UI-only localStorage settings
     localStorage.clear();
-    setStudents(INITIAL_STUDENTS);
-    setApplications(INITIAL_APPLICATIONS);
-    setCourses(INITIAL_COURSES);
-    setEnrollments(INITIAL_ENROLLMENTS);
-    setInvoices(INITIAL_INVOICES);
-    setStaffList(INITIAL_STAFF);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    setLibraryBooks(INITIAL_BOOKS);
-    setLibraryLoans(INITIAL_LOANS);
-    setAdvisingNotes(INITIAL_ADVISING_NOTES);
-    setAlumniList(INITIAL_ALUMNI);
+    // Reset all data states to empty
+    setStudents([]);
+    setApplications([]);
+    setCourses([]);
+    setEnrollments([]);
+    setInvoices([]);
+    setStaffList([]);
+    setAuditLogs([]);
+    setLibraryBooks([]);
+    setLibraryLoans([]);
+    setAdvisingNotes([]);
+    setAlumniList([]);
+    // Re-fetch fresh data from the live Neon DB
+    try {
+      const headers = getAuthHeaders();
+      const [stdRes, appRes, crsRes, invRes, staffRes, logRes] = await Promise.all([
+        fetch('/api/students', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/applications', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/courses', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/invoices', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/staff', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/audit-logs', { headers }).then(r => r.ok ? r.json() : []),
+      ]);
+      if (Array.isArray(stdRes)) setStudents(stdRes);
+      if (Array.isArray(appRes)) setApplications(appRes);
+      if (Array.isArray(crsRes)) setCourses(crsRes);
+      if (Array.isArray(invRes)) setInvoices(invRes);
+      if (Array.isArray(staffRes)) setStaffList(staffRes);
+      if (Array.isArray(logRes)) setAuditLogs(logRes);
+    } catch (err) {
+      console.warn('[resetDemoData] API unreachable:', err);
+    }
   };
+
 
   return (
     <AppContext.Provider
@@ -1353,6 +1288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addApplication,
         updateApplicationStatus,
         updateApplicationDocumentStatus,
+        addStudent,
         addCourse,
         updateCourse,
         deleteCourse,

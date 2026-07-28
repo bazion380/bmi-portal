@@ -8,37 +8,50 @@ interface SidebarProps {
   onNavigate: (page: Page) => void;
 }
 
-const NAV_ITEMS: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: 'dashboard',    label: 'Dashboard',       icon: '⬛', section: 'Main' },
-  { id: 'grades',       label: 'My Grades',       icon: '📊', section: 'Academic' },
-  { id: 'registration', label: 'Course Registration', icon: '📚' },
-  { id: 'finance',      label: 'Finance & Fees',  icon: '💳', section: 'Services' },
-  { id: 'library',      label: 'Library',         icon: '📖' },
-  { id: 'notifications',label: 'Notifications',   icon: '🔔', section: 'Account' },
-  { id: 'profile',      label: 'My Profile',      icon: '👤' },
+const navItems: { id: Page; label: string; icon: string; section?: string }[] = [
+  { id: 'dashboard',     label: 'Dashboard',     icon: '⬛', section: 'Main' },
+  { id: 'grades',        label: 'Grades',         icon: '📊' },
+  { id: 'registration',  label: 'Registration',   icon: '📋' },
+  { id: 'finance',       label: 'Finance & Fees', icon: '💳' },
+  { id: 'library',       label: 'Library',        icon: '📚', section: 'Services' },
+  { id: 'notifications', label: 'Notifications',  icon: '🔔' },
+  { id: 'profile',       label: 'My Profile',     icon: '👤', section: 'Account' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
   const { user, logout } = useAuth();
-  const initials = user?.name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) ?? 'ST';
+
+  const initials = user?.name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) ?? 'ST';
+
   let currentSection = '';
 
   return (
     <aside className="sidebar">
+      {/* Logo */}
       <div className="sidebar-logo">
         <div className="sidebar-logo-mark">BMI</div>
         <div className="sidebar-logo-text">
-          <strong>BMI UMS</strong>
-          <span>Student Portal</span>
+          <strong>BMI Portal</strong>
+          <span>Student Access</span>
         </div>
       </div>
+
+      {/* Navigation */}
       <nav className="sidebar-nav">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const showSection = item.section && item.section !== currentSection;
           if (item.section) currentSection = item.section;
+
           return (
             <React.Fragment key={item.id}>
-              {showSection && <div className="nav-section-label">{item.section}</div>}
+              {showSection && (
+                <div className="nav-section-label">{item.section}</div>
+              )}
               <button
                 className={`nav-item ${activePage === item.id ? 'active' : ''}`}
                 onClick={() => onNavigate(item.id)}
@@ -50,20 +63,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
           );
         })}
       </nav>
+
+      {/* User Footer */}
       <div className="sidebar-footer">
         <div className="user-pill">
           <div className="user-avatar">{initials}</div>
           <div className="user-info">
             <div className="user-name">{user?.name ?? 'Student'}</div>
-            <div className="user-role">{user?.studentId ?? ''}</div>
+            <div className="user-role">{user?.studentId ?? 'ID: —'}</div>
           </div>
-          <button onClick={logout} title="Sign out"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem' }}
-          >↩</button>
+          <button
+            onClick={logout}
+            title="Sign out"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem', padding: '2px 4px' }}
+          >
+            ↩
+          </button>
         </div>
       </div>
     </aside>
   );
 };
-
-export type { Page };

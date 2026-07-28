@@ -1,34 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  --primary-accent: #059669;
-  --secondary-accent: #d97706;
+@theme {
+  --color-indigo-50: var(--theme-primary-50);
+  --color-indigo-100: var(--theme-primary-100);
+  --color-indigo-200: var(--theme-primary-200);
+  --color-indigo-300: var(--theme-primary-300);
+  --color-indigo-400: var(--theme-primary-400);
+  --color-indigo-500: var(--theme-primary-500);
+  --color-indigo-600: var(--theme-primary-600);
+  --color-indigo-700: var(--theme-primary-700);
+  --color-indigo-800: var(--theme-primary-800);
+  --color-indigo-900: var(--theme-primary-900);
+  --color-indigo-950: var(--theme-primary-950);
 }
 
-/* Color Themes */
+:root {
+  --theme-primary-50: #ecfdf5;
+  --theme-primary-100: #d1fae5;
+  --theme-primary-200: #a7f3d0;
+  --theme-primary-300: #6ee7b7;
+  --theme-primary-400: #34d399;
+  --theme-primary-500: #10b981;
+  --theme-primary-600: #059669;
+  --theme-primary-700: #047857;
+  --theme-primary-800: #065f46;
+  --theme-primary-900: #064e3b;
+  --theme-primary-950: #022c22;
+}
+
 [data-theme="emerald"] {
-  --primary-accent: #059669;
-  --secondary-accent: #d97706;
+  --theme-primary-50: #ecfdf5;
+  --theme-primary-100: #d1fae5;
+  --theme-primary-200: #a7f3d0;
+  --theme-primary-300: #6ee7b7;
+  --theme-primary-400: #34d399;
+  --theme-primary-500: #10b981;
+  --theme-primary-600: #059669;
+  --theme-primary-700: #047857;
+  --theme-primary-800: #065f46;
+  --theme-primary-900: #064e3b;
+  --theme-primary-950: #022c22;
 }
 
 [data-theme="indigo"] {
-  --primary-accent: #4f46e5;
-  --secondary-accent: #0284c7;
+  --theme-primary-50: #eef2ff;
+  --theme-primary-100: #e0e7ff;
+  --theme-primary-200: #c7d2fe;
+  --theme-primary-300: #a5b4fc;
+  --theme-primary-400: #818cf8;
+  --theme-primary-500: #6366f1;
+  --theme-primary-600: #4f46e5;
+  --theme-primary-700: #4338ca;
+  --theme-primary-800: #3730a3;
+  --theme-primary-900: #312e81;
+  --theme-primary-950: #1e1b4b;
 }
 
 [data-theme="cyber"] {
-  --primary-accent: #0d9488;
-  --secondary-accent: #06b6d4;
+  --theme-primary-50: #f0fdfa;
+  --theme-primary-100: #ccfbf1;
+  --theme-primary-200: #99f6e4;
+  --theme-primary-300: #5eead4;
+  --theme-primary-400: #2dd4bf;
+  --theme-primary-500: #14b8a6;
+  --theme-primary-600: #0d9488;
+  --theme-primary-700: #0f766e;
+  --theme-primary-800: #115e59;
+  --theme-primary-900: #134e4a;
+  --theme-primary-950: #042f2e;
 }
 
 [data-theme="royal"] {
-  --primary-accent: #1d4ed8;
-  --secondary-accent: #eab308;
+  --theme-primary-50: #eff6ff;
+  --theme-primary-100: #dbeafe;
+  --theme-primary-200: #bfdbfe;
+  --theme-primary-300: #93c5fd;
+  --theme-primary-400: #60a5fa;
+  --theme-primary-500: #3b82f6;
+  --theme-primary-600: #2563eb;
+  --theme-primary-700: #1d4ed8;
+  --theme-primary-800: #1e40af;
+  --theme-primary-900: #1e3a8a;
+  --theme-primary-950: #172554;
 }
 
 [data-theme="midnight"] {
-  --primary-accent: #6366f1;
-  --secondary-accent: #10b981;
+  --theme-primary-50: #faf5ff;
+  --theme-primary-100: #f3e8ff;
+  --theme-primary-200: #e9d5ff;
+  --theme-primary-300: #d8b4fe;
+  --theme-primary-400: #c084fc;
+  --theme-primary-500: #a855f7;
+  --theme-primary-600: #9333ea;
+  --theme-primary-700: #7e22ce;
+  --theme-primary-800: #6b21a8;
+  --theme-primary-900: #581c87;
+  --theme-primary-950: #3b0764;
 }
 
 @layer utilities {

@@ -7,7 +7,7 @@ const JWT_SECRET: string = process.env.JWT_SECRET || (() => {
   if (process.env.NODE_ENV === "production") {
     throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production.");
   }
-  return crypto.randomBytes(32).toString("hex");
+  return "dev_secret_fallback_1234567890abcdef";
 })();
 
 // Get configured system passcode
