@@ -14,3 +14,9 @@ coverage/
 .windsurf/
 doRefactor.cjs
 refactor.js
+
+# Wrangler build/dev cache
+**/.wrangler/tmp/
+
+# Debug screenshots
+image*.png
