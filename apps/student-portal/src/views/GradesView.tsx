@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, Grade } from '../lib/api';
+import { api, GradeEntry as Grade } from '../lib/api';
 
 export const GradesView: React.FC = () => {
   const [grades, setGrades] = useState<Grade[]>([]);
