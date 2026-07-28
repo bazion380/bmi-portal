@@ -288,6 +288,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, on
               <RotateCcw className="w-4 h-4" />
             </button>
 
+          </div>
+        </div>
       </div>
     </header>
   );
