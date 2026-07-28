@@ -82,61 +82,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, on
         <div className="flex items-center justify-between h-16">
           
           {/* Logo & Brand */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentPortal('student')}>
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentPortal('staff')}>
             <BmiLogo size="md" />
           </div>
 
-          {/* Center: UMS Internal Portal Switcher Pill */}
-          <div className="hidden md:flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 shadow-inner">
-            <button
-              onClick={() => setCurrentPortal('student')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                currentPortal === 'student'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Student Portal</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setCurrentPortal('staff');
-                if (!authToken || authUser?.role === 'student') {
-                  onOpenLogin();
-                }
-              }}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                currentPortal === 'staff'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Staff / Admin</span>
-            </button>
+          {/* Center: Portal Label */}
+          <div className="hidden md:flex items-center bg-slate-800/80 px-4 py-1.5 rounded-xl border border-slate-700/60 shadow-inner text-xs font-semibold text-white">
+            <ShieldCheck className="w-3.5 h-3.5 mr-2 text-blue-400" />
+            <span>Staff / Admin Portal</span>
           </div>
 
           {/* Right Controls */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            
-            {/* Link to Separate Public University Website */}
-            <a
-              href="https://www.bmi.edu"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                e.preventDefault();
-                alert('Redirecting to the separate Public University Website (https://www.bmi.edu).\n\nThe Public Website operates on a separate domain/URL and connects to this UMS via secure API integration.');
-              }}
-              className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/60 text-xs font-semibold transition"
-              title="Open Separate Public University Website (www.bmi.edu)"
-            >
-              <Globe className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Public Website</span>
-              <ExternalLink className="w-3 h-3 text-emerald-400 opacity-75" />
-            </a>
             
             {/* Search Trigger */}
             <button
@@ -331,30 +288,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuditLog, onOpenSearch, on
               <RotateCcw className="w-4 h-4" />
             </button>
 
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Portal Navigation Bar */}
-      <div className="md:hidden bg-slate-950 border-t border-slate-800 px-4 py-2 flex items-center justify-around text-xs">
-        <button
-          onClick={() => setCurrentPortal('student')}
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-md font-medium ${
-            currentPortal === 'student' ? 'bg-indigo-600 text-white' : 'text-slate-400'
-          }`}
-        >
-          <UserCheck className="w-3.5 h-3.5" />
-          <span>Student Portal</span>
-        </button>
-        <button
-          onClick={() => setCurrentPortal('staff')}
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-md font-medium ${
-            currentPortal === 'staff' ? 'bg-blue-600 text-white' : 'text-slate-400'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Staff Dashboard</span>
-        </button>
       </div>
     </header>
   );
