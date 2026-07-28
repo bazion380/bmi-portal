@@ -1,6 +1,8 @@
 import 'dotenv/config';
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '../../src/generated/prisma/index.js';
 import { PrismaPg } from '@prisma/adapter-pg';
+
+
 
 // Prisma v7 requires a driver adapter for direct database connections.
 // We use the official @prisma/adapter-pg for PostgreSQL (Neon).

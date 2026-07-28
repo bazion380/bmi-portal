@@ -10,7 +10,7 @@
     "start": "node dist/server.cjs",
     "test": "vitest run",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && tsc --noEmit --project tsconfig.server.json",
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
